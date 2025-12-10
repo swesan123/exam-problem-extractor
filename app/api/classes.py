@@ -1,10 +1,11 @@
 """Class management API endpoints."""
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.db.models import Question
 from app.models.class_models import (
     ClassCreate,
     ClassListResponse,
@@ -12,6 +13,7 @@ from app.models.class_models import (
     ClassUpdate,
 )
 from app.services.class_service import ClassService
+from app.services.export_service import ExportFormat, ExportService
 
 logger = logging.getLogger(__name__)
 
@@ -221,5 +223,85 @@ async def delete_class(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete class: {str(e)}",
+        ) from e
+
+
+@router.get("/{class_id}/export", status_code=status.HTTP_200_OK)
+async def export_class_questions(
+    class_id: str,
+    format: str = Query("txt", description="Export format (txt, pdf, docx, json)"),
+    include_solutions: bool = Query(False, description="Include solutions in export"),
+    db: Session = Depends(get_db),
+):
+    """
+    Export all questions from a class to a file.
+
+    Args:
+        class_id: Class ID
+        format: Export format (txt, pdf, docx, json)
+        include_solutions: Whether to include solutions
+        db: Database session
+
+    Returns:
+        File download response
+    """
+    try:
+        # Validate class exists
+        service = ClassService(db)
+        class_obj = service.get_class(class_id)
+        if not class_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Class with ID '{class_id}' not found",
+            )
+
+        # Get all questions for the class
+        questions = db.query(Question).filter(Question.class_id == class_id).all()
+
+        if not questions:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No questions found for class '{class_id}'",
+            )
+
+        # Validate format
+        try:
+            export_format = ExportFormat(format.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported format '{format}'. Supported formats: txt, pdf, docx, json",
+            )
+
+        # Export questions
+        export_service = ExportService()
+        content, content_type, file_ext = export_service.export_questions(
+            questions, export_format, include_solutions
+        )
+
+        # Generate filename
+        filename = f"{class_obj.name.replace(' ', '_')}_questions.{file_ext}"
+
+        # Return file response
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to export class questions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export questions: {str(e)}",
         ) from e
 
