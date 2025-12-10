@@ -35,11 +35,11 @@ class Settings(BaseSettings):
 
     # OpenAI Models
     ocr_model: str = Field(
-        default="gpt-4-vision-preview",
-        description="OpenAI Vision model for OCR",
+        default="gpt-4o",
+        description="OpenAI Vision model for OCR (supports vision: gpt-4o, gpt-4-turbo, gpt-4o-mini)",
     )
     generation_model: str = Field(
-        default="gpt-4",
+        default="gpt-4o",
         description="OpenAI model for question generation",
     )
 

@@ -1,5 +1,6 @@
 """OCR service for extracting text from images using OpenAI Vision API."""
 import base64
+import logging
 import time
 from pathlib import Path
 from typing import Optional, Tuple
@@ -8,6 +9,8 @@ from openai import OpenAI
 
 from app.config import settings
 from app.utils.text_cleaning import clean_ocr_text
+
+logger = logging.getLogger(__name__)
 
 
 class OCRService:
@@ -87,6 +90,7 @@ class OCRService:
         last_error = None
         for attempt in range(max_retries):
             try:
+                logger.info(f"OCR attempt {attempt + 1}/{max_retries} using model: {self.model}")
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -102,18 +106,46 @@ class OCRService:
                 # Calculate processing time
                 processing_time = (time.time() - start_time) * 1000
 
+                logger.info(f"OCR extraction successful. Text length: {len(cleaned_text)} chars, Time: {processing_time:.2f}ms")
+
                 # Note: OpenAI Vision API doesn't provide confidence scores
                 # Return None for confidence
                 return cleaned_text, None
 
             except Exception as e:
                 last_error = e
+                error_details = str(e)
+                
+                # Log detailed error information
+                logger.error(
+                    f"OCR extraction attempt {attempt + 1}/{max_retries} failed",
+                    exc_info=True,
+                    extra={
+                        "model": self.model,
+                        "attempt": attempt + 1,
+                        "error_type": type(e).__name__,
+                        "error_message": error_details,
+                    }
+                )
+                
+                # Try to extract more details from OpenAI errors
+                if hasattr(e, 'response') and hasattr(e.response, 'json'):
+                    try:
+                        error_json = e.response.json()
+                        logger.error(f"OpenAI API error details: {error_json}")
+                        error_details = f"{error_details} - API Response: {error_json}"
+                    except Exception:
+                        pass
+                
                 if attempt < max_retries - 1:
                     # Exponential backoff: wait 2^attempt seconds
                     wait_time = 2 ** attempt
+                    logger.warning(f"Retrying OCR in {wait_time} seconds...")
                     time.sleep(wait_time)
                 else:
-                    raise Exception(f"OCR extraction failed after {max_retries} attempts: {str(e)}") from last_error
+                    final_error = Exception(f"OCR extraction failed after {max_retries} attempts: {error_details}")
+                    logger.error(f"OCR extraction failed after all retries. Final error: {error_details}", exc_info=True)
+                    raise final_error from last_error
 
         # Should not reach here, but handle just in case
         raise Exception(f"OCR extraction failed: {str(last_error)}") from last_error
