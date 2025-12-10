@@ -42,7 +42,19 @@ async def list_questions(
         service = QuestionService(db)
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
-        question_responses = [QuestionResponse.model_validate(q) for q in questions]
+        # Convert to response models, mapping question_metadata to metadata
+        question_responses = []
+        for q in questions:
+            question_responses.append(QuestionResponse(
+                id=q.id,
+                class_id=q.class_id,
+                question_text=q.question_text,
+                solution=q.solution,
+                metadata=q.question_metadata or {},
+                source_image=q.source_image,
+                created_at=q.created_at,
+                updated_at=q.updated_at,
+            ))
 
         return QuestionListResponse(
             questions=question_responses,
@@ -82,7 +94,19 @@ async def list_class_questions(
         service = QuestionService(db)
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
-        question_responses = [QuestionResponse.model_validate(q) for q in questions]
+        # Convert to response models, mapping question_metadata to metadata
+        question_responses = []
+        for q in questions:
+            question_responses.append(QuestionResponse(
+                id=q.id,
+                class_id=q.class_id,
+                question_text=q.question_text,
+                solution=q.solution,
+                metadata=q.question_metadata or {},
+                source_image=q.source_image,
+                created_at=q.created_at,
+                updated_at=q.updated_at,
+            ))
 
         return QuestionListResponse(
             questions=question_responses,

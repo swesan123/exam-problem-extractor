@@ -43,11 +43,6 @@ class Question(Base):
     # Relationship to class
     class_obj = relationship("Class", back_populates="questions")
     
-    @property
-    def metadata(self):
-        """Property to access question_metadata as metadata for backward compatibility."""
-        return self.question_metadata or {}
-    
     def __repr__(self):
         return f"<Question(id={self.id}, class_id={self.class_id})>"
 
