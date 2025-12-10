@@ -43,10 +43,13 @@ def init_db() -> None:
     """
     Initialize database by creating all tables.
     Should be called on application startup.
+    
+    Creates the data directory if it doesn't exist and creates all
+    database tables defined in the models.
     """
     # Ensure data directory exists
-    data_dir = Path("./data")
-    data_dir.mkdir(exist_ok=True)
+    data_dir = _db_path.parent
+    data_dir.mkdir(parents=True, exist_ok=True)
     
     # Create all tables
     Base.metadata.create_all(bind=engine)
