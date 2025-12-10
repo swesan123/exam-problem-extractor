@@ -35,13 +35,18 @@ class Question(Base):
     class_id = Column(String, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
     question_text = Column(Text, nullable=False)
     solution = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True, default=lambda: {})
+    question_metadata = Column("metadata", JSON, nullable=True, default=dict)  # Using "metadata" as column name but question_metadata as attribute
     source_image = Column(String, nullable=True)  # Path to original image if available
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationship to class
     class_obj = relationship("Class", back_populates="questions")
+    
+    @property
+    def metadata(self):
+        """Property to access question_metadata as metadata for backward compatibility."""
+        return self.question_metadata or {}
     
     def __repr__(self):
         return f"<Question(id={self.id}, class_id={self.class_id})>"

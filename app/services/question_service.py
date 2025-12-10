@@ -48,7 +48,7 @@ class QuestionService:
             class_id=question_data.class_id,
             question_text=question_data.question_text,
             solution=question_data.solution,
-            metadata=question_data.metadata or {},
+            question_metadata=question_data.metadata or {},
             source_image=question_data.source_image,
         )
 
@@ -92,7 +92,7 @@ class QuestionService:
         if question_data.solution is not None:
             question.solution = question_data.solution
         if question_data.metadata is not None:
-            question.metadata = question_data.metadata
+            question.question_metadata = question_data.metadata
 
         self.db.commit()
         self.db.refresh(question)

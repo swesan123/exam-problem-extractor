@@ -127,7 +127,17 @@ async def create_question(
         service = QuestionService(db)
         new_question = service.create_question(question_data)
 
-        return QuestionResponse.model_validate(new_question)
+        # Map question_metadata to metadata for response
+        return QuestionResponse(
+            id=new_question.id,
+            class_id=new_question.class_id,
+            question_text=new_question.question_text,
+            solution=new_question.solution,
+            metadata=new_question.question_metadata or {},
+            source_image=new_question.source_image,
+            created_at=new_question.created_at,
+            updated_at=new_question.updated_at,
+        )
 
     except ValueError as e:
         raise HTTPException(
@@ -169,7 +179,17 @@ async def get_question(
                 detail=f"Question with ID '{question_id}' not found",
             )
 
-        return QuestionResponse.model_validate(question)
+        # Map question_metadata to metadata for response
+        return QuestionResponse(
+            id=question.id,
+            class_id=question.class_id,
+            question_text=question.question_text,
+            solution=question.solution,
+            metadata=question.question_metadata or {},
+            source_image=question.source_image,
+            created_at=question.created_at,
+            updated_at=question.updated_at,
+        )
 
     except HTTPException:
         raise
@@ -208,7 +228,17 @@ async def update_question(
                 detail=f"Question with ID '{question_id}' not found",
             )
 
-        return QuestionResponse.model_validate(updated_question)
+        # Map question_metadata to metadata for response
+        return QuestionResponse(
+            id=updated_question.id,
+            class_id=updated_question.class_id,
+            question_text=updated_question.question_text,
+            solution=updated_question.solution,
+            metadata=updated_question.question_metadata or {},
+            source_image=updated_question.source_image,
+            created_at=updated_question.created_at,
+            updated_at=updated_question.updated_at,
+        )
 
     except HTTPException:
         raise

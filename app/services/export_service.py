@@ -81,7 +81,7 @@ class ExportService:
                     "id": q.id,
                     "question_text": q.question_text,
                     "solution": q.solution if include_solutions else None,
-                    "metadata": q.metadata,
+                    "metadata": q.question_metadata or {},
                     "created_at": q.created_at.isoformat() if q.created_at else None,
                 }
                 for q in questions
