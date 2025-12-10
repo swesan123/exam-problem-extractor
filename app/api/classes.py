@@ -1,10 +1,11 @@
 """Class management API endpoints."""
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.db.models import Question
 from app.models.class_models import (
     ClassCreate,
     ClassListResponse,
@@ -12,6 +13,7 @@ from app.models.class_models import (
     ClassUpdate,
 )
 from app.services.class_service import ClassService
+from app.services.export_service import ExportFormat, ExportService
 
 logger = logging.getLogger(__name__)
 
