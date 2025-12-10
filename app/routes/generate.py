@@ -1,15 +1,23 @@
 """Generation route endpoint."""
+import json
+import logging
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
 
+from app.db.database import get_db
 from app.models.generation_models import GenerateResponse
+from app.models.question_models import QuestionCreate
 from app.services.generation_service import GenerationService
 from app.services.ocr_service import OCRService
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
+from app.services.question_service import QuestionService
 from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_image_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generation"])
 
@@ -20,6 +28,8 @@ async def generate_question(
     image_file: Optional[UploadFile] = File(None),
     retrieved_context: Optional[str] = Form(None),  # JSON string
     include_solution: bool = Form(False),
+    class_id: Optional[str] = Form(None),  # Optional class ID to save question to
+    db: Session = Depends(get_db),
 ):
     """
     Generate exam question from image or text.
@@ -28,11 +38,15 @@ async def generate_question(
     1. Image upload: Automatically performs OCR and retrieval
     2. Direct text: Uses provided ocr_text and optional retrieved_context
 
+    If class_id is provided, the generated question will be automatically saved to that class.
+
     Args:
         ocr_text: Pre-extracted OCR text (alternative to image_file)
         image_file: Image file for OCR extraction (alternative to ocr_text)
         retrieved_context: JSON string of pre-retrieved context (optional)
         include_solution: Whether to include solution in generated question
+        class_id: Optional class ID to automatically save question to
+        db: Database session
 
     Returns:
         GenerateResponse with formatted question and metadata
@@ -99,10 +113,50 @@ async def generate_question(
         metadata = result.get("metadata", {})
         metadata["processing_steps"] = processing_steps
 
+        # Step 4: Save to class if class_id provided
+        question_id = None
+        saved_class_id = None
+        if class_id:
+            try:
+                question_service = QuestionService(db)
+                
+                # Extract solution if included
+                solution_text = None
+                if include_solution and result.get("solution"):
+                    solution_text = result["solution"]
+                
+                # Create question data
+                question_data = QuestionCreate(
+                    class_id=class_id,
+                    question_text=question,
+                    solution=solution_text,
+                    metadata={
+                        "generated": True,
+                        "processing_steps": processing_steps,
+                        "generation_metadata": metadata,
+                    },
+                    source_image=str(temp_path) if temp_path else None,
+                )
+                
+                saved_question = question_service.create_question(question_data)
+                question_id = saved_question.id
+                saved_class_id = class_id
+                
+                logger.info(f"Saved generated question {question_id} to class {class_id}")
+                
+            except ValueError as e:
+                # Class not found - log but don't fail the request
+                logger.warning(f"Failed to save question to class {class_id}: {e}")
+            except Exception as e:
+                # Log error but don't fail the request
+                logger.error(f"Error saving question to class: {e}", exc_info=True)
+
         return GenerateResponse(
             question=question,
             metadata=metadata,
             processing_steps=processing_steps,
+            question_id=question_id,
+            class_id=saved_class_id,
         )
 
     except HTTPException:

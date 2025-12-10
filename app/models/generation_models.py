@@ -50,6 +50,8 @@ class GenerateResponse(BaseModel):
     question: str = Field(..., description="Generated exam-style question")
     metadata: dict = Field(..., description="Metadata about the generation process")
     processing_steps: List[str] = Field(..., description="List of processing steps performed")
+    question_id: Optional[str] = Field(None, description="ID of saved question (if class_id provided)")
+    class_id: Optional[str] = Field(None, description="ID of class question was saved to (if provided)")
 
     model_config = {
         "json_schema_extra": {
