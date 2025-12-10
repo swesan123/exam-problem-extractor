@@ -167,6 +167,54 @@ PORT=8000
 
 **Important**: Never commit `.env` files or hardcode credentials in the codebase.
 
+## Quick Start
+
+### Backend Setup
+
+1. **Install dependencies:**
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+2. **Configure environment:**
+```bash
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+3. **Run backend:**
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend Setup
+
+1. **Install dependencies:**
+```bash
+cd frontend
+npm install
+```
+
+2. **Configure environment:**
+```bash
+# Create frontend/.env
+echo "VITE_API_BASE_URL=http://localhost:8000" > frontend/.env
+```
+
+3. **Run frontend:**
+```bash
+npm run dev
+```
+
+4. **Access application:**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+
+For detailed usage instructions, see [Usage Guide](docs/USAGE_GUIDE.md).
+
 ## Usage Examples
 
 ### Running the Server
