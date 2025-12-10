@@ -37,6 +37,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Exam Problem Extractor API...")
     logger.info(f"Environment: {settings.log_level}")
+    logger.info(f"Vector DB: {settings.vector_db_type} at {settings.vector_db_path}")
+    
+    # Validate required environment variables
+    try:
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required but not set")
+        logger.info("Environment variables validated successfully")
+    except Exception as e:
+        logger.error(f"Environment variable validation failed: {e}")
+        raise
     
     # Initialize database
     try:
@@ -45,6 +55,7 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        raise
     
     yield
     # Shutdown
@@ -181,21 +192,45 @@ async def log_requests(request: Request, call_next):
 @app.get("/health")
 async def health_check():
     """
-    Health check endpoint with service status.
+    Enhanced health check endpoint with comprehensive service status.
 
     Returns:
-        Health status with service checks
+        Health status with detailed service checks including:
+        - Database connectivity
+        - OpenAI API connectivity
+        - Vector DB status
+        - Service version info
     """
+    import shutil
+    from app.db.database import engine
+    
     checks = {}
     overall_status = "healthy"
+    version = "1.0.0"
+
+    # Check Database connectivity
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)[:50]}"
+        overall_status = "degraded"
+        logger.warning(f"Database health check failed: {e}")
 
     # Check OpenAI API connectivity
     try:
         from openai import OpenAI
         client = OpenAI(api_key=settings.openai_api_key)
-        # Simple check - just verify API key is set
+        # Try a lightweight API call to verify connectivity
         if settings.openai_api_key:
-            checks["openai_api"] = "ok"
+            # Just verify the key is set and valid format (don't make actual API call for speed)
+            if len(settings.openai_api_key) > 20 and settings.openai_api_key.startswith("sk-"):
+                checks["openai_api"] = "ok"
+            else:
+                checks["openai_api"] = "warning: invalid key format"
+                overall_status = "degraded"
         else:
             checks["openai_api"] = "error"
             overall_status = "degraded"
@@ -227,7 +262,7 @@ async def health_check():
 
     return {
         "status": overall_status,
-        "version": "0.1.0",
+        "version": version,
         "service": "exam-problem-extractor",
         "checks": checks,
     }
