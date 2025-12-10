@@ -19,6 +19,7 @@ from app.exceptions import (
 )
 from app.middleware import RequestIDMiddleware
 from app.routes import embed, generate, ocr, retrieve
+from app.api import classes
 
 # Configure logging
 logging.basicConfig(
@@ -153,6 +154,7 @@ app.include_router(ocr.router)
 app.include_router(embed.router)
 app.include_router(retrieve.router)
 app.include_router(generate.router)
+app.include_router(classes.router)
 
 
 # Logging middleware for requests
