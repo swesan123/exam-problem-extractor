@@ -1,0 +1,129 @@
+---
+alwaysApply: true
+---
+PROJECT OVERVIEW
+This project is a Python-based backend service that converts screenshots into exam-style questions.
+It provides API endpoints for image upload, OCR extraction, vector retrieval over past exam data,
+and final question generation using OpenAI models. The server runs on FastAPI with modular services
+for OCR, embeddings, retrieval, and question generation.
+
+TECH STACK REQUIREMENTS
+- Python 3.10+ only.
+- Backend must use FastAPI.
+- Use Pydantic models for request/response schemas.
+- Use OpenAI's API for:
+  - Vision OCR (images in → text out)
+  - Text embeddings for RAG
+  - Final question generation (gpt-4.1 or gpt-4.1-mini)
+- Use ChromaDB or FAISS as the vector store.
+- Use uvicorn or gunicorn for serving.
+
+FILE & FOLDER STRUCTURE
+Maintain the exact structure unless explicitly asked to change:
+
+/app
+  main.py
+  /routes
+    ocr.py
+    embed.py
+    retrieve.py
+    generate.py
+  /services
+    ocr_service.py
+    embedding_service.py
+    retrieval_service.py
+    generation_service.py
+  /models
+    ocr_models.py
+    embedding_models.py
+    retrieval_models.py
+    generation_models.py
+  /utils
+    file_utils.py
+    text_cleaning.py
+    chunking.py
+
+/vector_store
+  chroma_index/ (or faiss_index/)
+
+/tests
+  test_ocr.py
+  test_retrieval.py
+  test_generate.py
+
+ENVIRONMENT REQUIREMENTS
+- Load OPENAI_API_KEY from environment variables.
+- Do NOT hardcode any credentials or file paths.
+- Vector DB path must be configurable via .env.
+
+API ENDPOINT RULES
+- /ocr         POST: extract text from uploaded image (Vision model)
+- /embed       POST: embed text chunks into vector store
+- /retrieve    POST: retrieve similar exam content (top_k)
+- /generate    POST: final exam-style question generation
+
+- All endpoints must:
+  - Use Pydantic request/response models
+  - Validate inputs
+  - Handle errors with proper HTTPException
+  - Return structured JSON
+
+FASTAPI CONVENTIONS
+- Use APIRouter for each logical module (ocr, embed, retrieve, generate).
+- Include routers in main.py with predictable prefixes.
+- Use dependency injection where appropriate.
+- Keep endpoint functions thin; put main logic in /services layer.
+
+SERVICE LAYER RULES
+- OCR service should isolate interaction with OpenAI Vision.
+- Embedding service must generate embeddings using OpenAI and store them consistently.
+- Retrieval service must abstract away FAISS/Chroma operations.
+- Generation service formats the final question using:
+  OCR text + retrieved examples.
+
+CODE STYLE & STRUCTURE
+- Use black + isort formatting.
+- Use type hints everywhere.
+- Use pathlib instead of os.path when possible.
+- Small, focused functions with clear responsibilities.
+- Prefer early returns to reduce nesting.
+
+ERROR HANDLING
+- Use HTTPException for all API errors with meaningful messages.
+- Validate image files, text inputs, and vector store states before processing.
+- Log errors with traceback for debugging.
+
+IMPORT RULES
+- Order imports: standard library → third-party → internal modules.
+- Remove unused imports automatically.
+- Never import from non-existent paths.
+
+VECTOR DB RULES
+- Ensure same embedding model is used throughout.
+- Store metadata such as exam source, page number, and chunk ID.
+- Retrieval must return sorted results with scores.
+
+AI GENERATION RULES
+- Never output solutions unless explicitly requested.
+- Format exam-style questions cleanly.
+- Ground generation using retrieved context (RAG).
+- Avoid hallucinated or fabricated exam content.
+
+REFactoring RULES
+- Prefer minimal-diff updates unless instructed otherwise.
+- Preserve function behavior and naming where possible.
+- Maintain existing folder structure.
+
+MCP WORKFLOW
+- Before modifying files or running commands, always propose a plan.
+- For GitHub issues:
+  - Create a new branch for the issue.
+  - Commit after each file modification.
+  - Push and open a PR when ready.
+  - Auto-close issue after merge.
+
+PROHIBITED ACTIONS
+- Do NOT generate CSS/HTML/JS frontend code unless explicitly asked.
+- Do NOT mix frontend logic with backend.
+- Do NOT invent APIs, handlers, or vector schemas.
+- Do NOT create placeholder functions or incomplete code.
