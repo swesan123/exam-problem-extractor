@@ -1,8 +1,10 @@
 """SQLAlchemy database models for classes and questions."""
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.sqlite import UUID
 
 from app.db.database import Base
 

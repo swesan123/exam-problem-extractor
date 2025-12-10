@@ -7,8 +7,9 @@ from typing import Generator
 
 from app.config import settings
 
-# Database URL - SQLite file
-DATABASE_URL = f"sqlite:///./data/app.db"
+# Database URL - SQLite file (use absolute path)
+_db_path = Path("./data/app.db").resolve()
+DATABASE_URL = f"sqlite:///{_db_path}"
 
 # Create engine
 engine = create_engine(
