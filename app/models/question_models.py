@@ -57,24 +57,6 @@ class QuestionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @classmethod
-    def model_validate(cls, obj, **kwargs):
-        """Override to map question_metadata to metadata."""
-        if hasattr(obj, 'question_metadata'):
-            # Create a dict with metadata mapped from question_metadata
-            data = {
-                'id': obj.id,
-                'class_id': obj.class_id,
-                'question_text': obj.question_text,
-                'solution': obj.solution,
-                'metadata': obj.question_metadata or {},
-                'source_image': obj.source_image,
-                'created_at': obj.created_at,
-                'updated_at': obj.updated_at,
-            }
-            return cls(**data)
-        return super().model_validate(obj, **kwargs)
-
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
