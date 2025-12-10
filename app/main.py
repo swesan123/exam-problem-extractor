@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routes import embed, generate, ocr, retrieve
 
 # Create FastAPI application
 app = FastAPI(
@@ -21,6 +22,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(ocr.router)
+app.include_router(embed.router)
+app.include_router(retrieve.router)
+app.include_router(generate.router)
 
 
 @app.get("/health")
