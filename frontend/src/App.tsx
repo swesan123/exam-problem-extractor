@@ -5,6 +5,7 @@ import Classes from './pages/Classes'
 import ClassDetails from './pages/ClassDetails'
 import ClassQuestions from './pages/ClassQuestions'
 import Generate from './pages/Generate'
+import ReferenceContent from './pages/ReferenceContent'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/classes/:id" element={<ClassDetails />} />
         <Route path="/classes/:id/questions" element={<ClassQuestions />} />
         <Route path="/generate" element={<Generate />} />
+        <Route path="/reference" element={<ReferenceContent />} />
       </Routes>
     </Layout>
   )

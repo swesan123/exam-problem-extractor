@@ -33,6 +33,12 @@ const Layout = ({ children }: LayoutProps) => {
                 Classes
               </Link>
               <Link
+                to="/reference"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Reference Content
+              </Link>
+              <Link
                 to="/generate"
                 className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
               >
