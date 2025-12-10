@@ -36,6 +36,15 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Exam Problem Extractor API...")
     logger.info(f"Environment: {settings.log_level}")
+    
+    # Initialize database
+    try:
+        from app.db.database import init_db
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+    
     yield
     # Shutdown
     logger.info("Shutting down Exam Problem Extractor API...")
