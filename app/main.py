@@ -168,11 +168,56 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint with service status.
+
+    Returns:
+        Health status with service checks
+    """
+    checks = {}
+    overall_status = "healthy"
+
+    # Check OpenAI API connectivity
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=settings.openai_api_key)
+        # Simple check - just verify API key is set
+        if settings.openai_api_key:
+            checks["openai_api"] = "ok"
+        else:
+            checks["openai_api"] = "error"
+            overall_status = "degraded"
+    except Exception:
+        checks["openai_api"] = "error"
+        overall_status = "degraded"
+
+    # Check vector DB
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(settings.vector_db_path))
+        checks["vector_db"] = "ok"
+    except Exception:
+        checks["vector_db"] = "error"
+        overall_status = "degraded"
+
+    # Check disk space (basic check)
+    try:
+        import shutil
+        total, used, free = shutil.disk_usage(settings.vector_db_path.parent)
+        free_gb = free / (1024**3)
+        if free_gb > 1:  # At least 1GB free
+            checks["disk_space"] = "ok"
+        else:
+            checks["disk_space"] = "warning"
+            overall_status = "degraded"
+    except Exception:
+        checks["disk_space"] = "unknown"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
         "version": "0.1.0",
         "service": "exam-problem-extractor",
+        "checks": checks,
     }
 
 
