@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/questions", tags=["questions"])
 
 @router.get("", response_model=QuestionListResponse, status_code=status.HTTP_200_OK)
 async def list_questions(
+<<<<<<< HEAD
     class_id: str = Query(None, description="Filter by class ID"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
@@ -40,6 +41,27 @@ async def list_questions(
     try:
         service = QuestionService(db)
         skip = (page - 1) * limit
+=======
+    class_id: Optional[str] = Query(None, description="Filter by class ID"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    List all questions with optional class filter and pagination.
+
+    Args:
+        class_id: Optional class ID to filter by
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        db: Database session
+
+    Returns:
+        List of questions with total count
+    """
+    try:
+        service = QuestionService(db)
+>>>>>>> main
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
         question_responses = [QuestionResponse.model_validate(q) for q in questions]
@@ -47,7 +69,11 @@ async def list_questions(
         return QuestionListResponse(
             questions=question_responses,
             total=total,
+<<<<<<< HEAD
             page=page,
+=======
+            skip=skip,
+>>>>>>> main
             limit=limit,
         )
 
@@ -62,6 +88,7 @@ async def list_questions(
 @router.get("/classes/{class_id}/questions", response_model=QuestionListResponse, status_code=status.HTTP_200_OK)
 async def list_class_questions(
     class_id: str,
+<<<<<<< HEAD
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
     db: Session = Depends(get_db),
@@ -73,6 +100,19 @@ async def list_class_questions(
         class_id: Class ID
         page: Page number (1-based)
         limit: Number of items per page
+=======
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    List all questions for a specific class.
+
+    Args:
+        class_id: Class ID
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+>>>>>>> main
         db: Database session
 
     Returns:
@@ -80,7 +120,10 @@ async def list_class_questions(
     """
     try:
         service = QuestionService(db)
+<<<<<<< HEAD
         skip = (page - 1) * limit
+=======
+>>>>>>> main
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
         question_responses = [QuestionResponse.model_validate(q) for q in questions]
@@ -88,7 +131,11 @@ async def list_class_questions(
         return QuestionListResponse(
             questions=question_responses,
             total=total,
+<<<<<<< HEAD
             page=page,
+=======
+            skip=skip,
+>>>>>>> main
             limit=limit,
         )
 
@@ -107,7 +154,11 @@ async def create_question(
     db: Session = Depends(get_db),
 ):
     """
+<<<<<<< HEAD
     Create a new question in a class.
+=======
+    Create a new question for a class.
+>>>>>>> main
 
     Args:
         class_id: Class ID (must match question_data.class_id)
@@ -118,11 +169,19 @@ async def create_question(
         Created question
     """
     try:
+<<<<<<< HEAD
         # Ensure class_id matches
         if question_data.class_id != class_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Class ID in path does not match class_id in request body",
+=======
+        # Validate class_id matches
+        if question_data.class_id != class_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Class ID mismatch: path parameter '{class_id}' != body '{question_data.class_id}'",
+>>>>>>> main
             )
 
         service = QuestionService(db)

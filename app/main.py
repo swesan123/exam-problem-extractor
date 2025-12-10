@@ -19,7 +19,7 @@ from app.exceptions import (
 )
 from app.middleware import RequestIDMiddleware
 from app.routes import embed, generate, ocr, retrieve
-from app.api import classes
+from app.api import classes, questions
 
 # Configure logging
 logging.basicConfig(
