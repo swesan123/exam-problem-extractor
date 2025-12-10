@@ -2,7 +2,7 @@
 from typing import List, Optional
 
 from fastapi import UploadFile
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class GenerateRequest(BaseModel):
@@ -26,14 +26,12 @@ class GenerateRequest(BaseModel):
         description="Whether to include solution in the generated question",
     )
 
-    @field_validator("ocr_text", "image_file")
-    @classmethod
-    def validate_at_least_one_provided(cls, v, info):
+    @model_validator(mode="after")
+    def validate_at_least_one_provided(self):
         """Ensure at least one of ocr_text or image_file is provided."""
-        values = info.data
-        if not values.get("ocr_text") and not values.get("image_file"):
+        if not self.ocr_text and not self.image_file:
             raise ValueError("At least one of 'ocr_text' or 'image_file' must be provided")
-        return v
+        return self
 
     model_config = {
         "json_schema_extra": {
