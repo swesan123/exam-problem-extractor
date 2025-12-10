@@ -155,6 +155,7 @@ app.include_router(embed.router)
 app.include_router(retrieve.router)
 app.include_router(generate.router)
 app.include_router(classes.router)
+app.include_router(questions.router)
 
 
 # Logging middleware for requests
