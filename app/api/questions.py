@@ -42,7 +42,7 @@ async def list_questions(
         skip = (page - 1) * limit
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
-        question_responses = [QuestionResponse.from_orm(q) for q in questions]
+        question_responses = [QuestionResponse.model_validate(q) for q in questions]
 
         return QuestionListResponse(
             questions=question_responses,
@@ -83,7 +83,7 @@ async def list_class_questions(
         skip = (page - 1) * limit
         questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
 
-        question_responses = [QuestionResponse.from_orm(q) for q in questions]
+        question_responses = [QuestionResponse.model_validate(q) for q in questions]
 
         return QuestionListResponse(
             questions=question_responses,
@@ -128,7 +128,7 @@ async def create_question(
         service = QuestionService(db)
         new_question = service.create_question(question_data)
 
-        return QuestionResponse.from_orm(new_question)
+        return QuestionResponse.model_validate(new_question)
 
     except ValueError as e:
         raise HTTPException(
@@ -170,7 +170,7 @@ async def get_question(
                 detail=f"Question with ID '{question_id}' not found",
             )
 
-        return QuestionResponse.from_orm(question)
+        return QuestionResponse.model_validate(question)
 
     except HTTPException:
         raise
@@ -209,7 +209,7 @@ async def update_question(
                 detail=f"Question with ID '{question_id}' not found",
             )
 
-        return QuestionResponse.from_orm(updated_question)
+        return QuestionResponse.model_validate(updated_question)
 
     except HTTPException:
         raise
