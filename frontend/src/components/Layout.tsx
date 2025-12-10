@@ -26,6 +26,12 @@ const Layout = ({ children }: LayoutProps) => {
               >
                 Home
               </Link>
+              <Link
+                to="/classes"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Classes
+              </Link>
             </div>
           </div>
         </div>

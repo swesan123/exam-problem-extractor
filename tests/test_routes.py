@@ -80,7 +80,7 @@ def test_embed_endpoint_validation():
     assert response.status_code in [400, 422]
 
 
-def test_retrieve_endpoint_validation(client: TestClient):
+def test_retrieve_endpoint_validation():
     """Test retrieve endpoint validation."""
     response = client.post("/retrieve", json={"query": "", "top_k": 5})
     # Should fail validation
