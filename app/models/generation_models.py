@@ -5,16 +5,16 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class GenerateRequest(BaseModel):
-    """Request model for generation endpoint."""
+    """Request model for generation endpoint.
+    
+    Note: image_file is handled separately via FastAPI's File() parameter
+    in the route handler, not as a Pydantic field.
+    """
 
     ocr_text: Optional[str] = Field(
         None,
         min_length=1,
         description="Pre-extracted OCR text (alternative to image_file)",
-    )
-    image_file: Optional[UploadFile] = Field(
-        None,
-        description="Image file for OCR extraction (alternative to ocr_text)",
     )
     retrieved_context: Optional[List[str]] = Field(
         None,
@@ -24,13 +24,6 @@ class GenerateRequest(BaseModel):
         default=False,
         description="Whether to include solution in the generated question",
     )
-
-    @model_validator(mode="after")
-    def validate_at_least_one_provided(self):
-        """Ensure at least one of ocr_text or image_file is provided."""
-        if not self.ocr_text and not self.image_file:
-            raise ValueError("At least one of 'ocr_text' or 'image_file' must be provided")
-        return self
 
     model_config = {
         "json_schema_extra": {
