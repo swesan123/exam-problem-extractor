@@ -81,7 +81,12 @@ class EmbeddingService:
         Returns:
             Embedding ID (chunk_id from metadata)
         """
-        chunk_id = metadata.get("chunk_id", f"chunk_{len(self.collection.get()['ids'])}")
+        # Generate chunk_id if not provided
+        if "chunk_id" not in metadata:
+            existing_ids = self.collection.get()["ids"]
+            chunk_id = f"chunk_{len(existing_ids)}"
+        else:
+            chunk_id = metadata["chunk_id"]
 
         # Store in ChromaDB
         self.collection.add(

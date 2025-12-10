@@ -1,7 +1,6 @@
 """Pydantic models for generation endpoint."""
 from typing import List, Optional
 
-from fastapi import UploadFile
 from pydantic import BaseModel, Field, model_validator
 
 

@@ -60,12 +60,19 @@ def chunk_by_sentences(text: str, max_chunk_size: int = 1000) -> List[str]:
     if not text:
         return []
 
-    # Split by sentence endings
-    sentences = re.split(r"([.!?]\s+)", text)
+    # Split by sentence endings, preserving punctuation
+    sentence_parts = re.split(r"([.!?]\s+)", text)
     # Recombine sentences with their punctuation
-    sentences = ["".join(sentences[i : i + 2]) for i in range(0, len(sentences) - 1, 2)]
-    if len(sentences) % 2 == 1:
-        sentences.append(sentences[-1])
+    sentences = []
+    for i in range(0, len(sentence_parts) - 1, 2):
+        if i + 1 < len(sentence_parts):
+            sentences.append(sentence_parts[i] + sentence_parts[i + 1])
+        else:
+            sentences.append(sentence_parts[i])
+    
+    # Handle case where last part is just punctuation
+    if len(sentence_parts) % 2 == 1 and sentence_parts[-1].strip():
+        sentences.append(sentence_parts[-1])
 
     chunks = []
     current_chunk = ""

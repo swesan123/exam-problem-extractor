@@ -154,13 +154,16 @@ Generate a clean, well-formatted exam question with a complete solution based on
 
             # Try to separate question and solution
             # This is a simple heuristic - in production, you might want more sophisticated parsing
-            parts = content.split("\n\nSolution:", 1)
-            if len(parts) == 2:
-                question = parts[0].replace("Question:", "").strip()
-                solution = parts[1].strip()
-            else:
-                question = content
-                solution = ""
+            solution_markers = ["\n\nSolution:", "\nSolution:", "Solution:\n"]
+            question = content
+            solution = ""
+            
+            for marker in solution_markers:
+                if marker in content:
+                    parts = content.split(marker, 1)
+                    question = parts[0].replace("Question:", "").strip()
+                    solution = parts[1].strip()
+                    break
 
             metadata = {
                 "model": self.model,

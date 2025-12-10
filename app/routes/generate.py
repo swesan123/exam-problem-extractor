@@ -1,13 +1,14 @@
 """Generation route endpoint."""
+import json
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.models.generation_models import GenerateResponse
+from app.services.embedding_service import EmbeddingService
 from app.services.generation_service import GenerationService
 from app.services.ocr_service import OCRService
-from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_image_file
 
@@ -66,7 +67,6 @@ async def generate_question(
         context_list: List[str] = []
         if retrieved_context:
             # Parse JSON string if provided
-            import json
             try:
                 context_list = json.loads(retrieved_context)
                 if not isinstance(context_list, list):
