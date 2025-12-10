@@ -1,4 +1,5 @@
 """Text chunking utilities."""
+import re
 from typing import List
 
 
@@ -145,8 +146,4 @@ def smart_chunk(text: str, max_size: int = 1000) -> List[str]:
         chunks.append(current_chunk.strip())
 
     return chunks if chunks else [text]
-
-
-# Import re for sentence splitting
-import re
 
