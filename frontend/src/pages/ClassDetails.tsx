@@ -4,6 +4,7 @@ import { classService } from '../services/classService'
 import { referenceContentService, ReferenceContentItem } from '../services/referenceContentService'
 import { Class } from '../types/class'
 import AddReferenceContentModal from '../components/AddReferenceContentModal'
+import { ReferenceUploadProgress } from '../components/ReferenceUploadProgress'
 
 const ClassDetails = () => {
   const { id } = useParams<{ id: string }>()
@@ -239,6 +240,8 @@ const ClassDetails = () => {
           onSuccess={handleAddSuccess}
         />
       )}
+
+      {id && <ReferenceUploadProgress classId={id} onJobComplete={handleAddSuccess} />}
     </div>
   )
 }
