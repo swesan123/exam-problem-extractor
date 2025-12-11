@@ -1,15 +1,22 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { generateService, GenerateRequest } from '../services/generateService'
 import { classService } from '../services/classService'
 import { Class } from '../types/class'
 import { GenerateResponse } from '../types/question'
-import { useEffect } from 'react'
+
+interface FileWithStatus {
+  file: File
+  status: 'pending' | 'processing' | 'success' | 'error'
+  error?: string
+}
 
 const Generate = () => {
   const [classes, setClasses] = useState<Class[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [ocrText, setOcrText] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [retrievedContext, setRetrievedContext] = useState('')
+  const [files, setFiles] = useState<FileWithStatus[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   const [includeSolution, setIncludeSolution] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,28 +27,129 @@ const Generate = () => {
     const loadClasses = async () => {
       try {
         const response = await classService.getAll()
-        setClasses(response.classes)
+        setClasses(response.classes || [])
       } catch (err) {
         console.error('Failed to load classes:', err)
+        setClasses([])
       }
     }
     loadClasses()
   }, [])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0])
-      setOcrText('') // Clear OCR text when file is selected
+  const isValidFile = (file: File): boolean => {
+    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+    const validPdfType = 'application/pdf'
+    return validImageTypes.includes(file.type) || file.type === validPdfType
+  }
+
+  const handleFiles = useCallback((fileList: FileList | File[]) => {
+    const newFiles: FileWithStatus[] = []
+    const filesArray = Array.from(fileList)
+
+    filesArray.forEach((file) => {
+      if (!isValidFile(file)) {
+        setError(`Invalid file type: ${file.name}. Please upload images (PNG, JPG, JPEG) or PDFs.`)
+        return
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError(`File too large: ${file.name}. Maximum size is 10MB.`)
+        return
+      }
+      newFiles.push({
+        file,
+        status: 'pending',
+      })
+    })
+
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles])
+      setError(null)
+      // Clear OCR text when files are added
+      setOcrText('')
     }
+  }, [])
+
+  // Handle paste from clipboard
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      const imageFiles: File[] = []
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile()
+          if (blob) {
+            const file = new File([blob], `pasted-image-${Date.now()}.png`, {
+              type: blob.type,
+            })
+            imageFiles.push(file)
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault()
+        handleFiles(imageFiles)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => {
+      window.removeEventListener('paste', handlePaste)
+    }
+  }, [handleFiles])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragging(false)
+
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files)
+      }
+    },
+    [handleFiles]
+  )
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleFiles(e.target.files)
+      }
+    },
+    [handleFiles]
+  )
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!ocrText && !imageFile) {
-      setError('Please provide either OCR text or upload an image')
+
+    if (!ocrText && files.length === 0) {
+      setError('Please provide either OCR text or upload an image/PDF')
       return
     }
+
+    // Use the first file if multiple files are selected
+    const imageFile = files.length > 0 ? files[0].file : null
 
     setLoading(true)
     setError(null)
@@ -51,6 +159,7 @@ const Generate = () => {
       const request: GenerateRequest = {
         ocr_text: ocrText || undefined,
         image_file: imageFile || undefined,
+        retrieved_context: retrievedContext || undefined,
         include_solution: includeSolution,
         class_id: selectedClassId || undefined,
       }
@@ -61,7 +170,8 @@ const Generate = () => {
       // Reset form if question was saved to class
       if (response.question_id) {
         setOcrText('')
-        setImageFile(null)
+        setRetrievedContext('')
+        setFiles([])
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
         }
@@ -90,7 +200,7 @@ const Generate = () => {
                 id="class"
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select a class...</option>
                 {classes.map((classItem) => (
@@ -101,20 +211,101 @@ const Generate = () => {
               </select>
             </div>
 
+            {/* Drag and Drop Zone */}
             <div className="mb-4">
-              <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Image
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Upload Image or PDF
               </label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                id="image"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {imageFile && (
-                <p className="mt-2 text-sm text-gray-600">Selected: {imageFile.name}</p>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  id="file-input"
+                  multiple
+                  accept="image/*,.pdf"
+                  onChange={handleFileInput}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="file-input"
+                  className="cursor-pointer flex flex-col items-center"
+                >
+                  <svg
+                    className="w-12 h-12 text-gray-400 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  <p className="text-gray-600 mb-2">
+                    <span className="text-blue-600 font-medium">Click to upload</span>, drag and drop, or{' '}
+                    <span className="text-blue-600 font-medium">paste from clipboard</span>
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Images (PNG, JPG, JPEG) or PDFs (max 10MB each)
+                  </p>
+                </label>
+              </div>
+
+              {/* File List */}
+              {files.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {files.map((fileWithStatus, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200"
+                    >
+                      <div className="flex items-center flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {fileWithStatus.file.name}
+                        </p>
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({(fileWithStatus.file.size / 1024).toFixed(1)} KB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="ml-2 text-red-600 hover:text-red-800"
+                        title="Remove file"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  {files.length > 1 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: Only the first file will be used for generation
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -128,14 +319,34 @@ const Generate = () => {
                 value={ocrText}
                 onChange={(e) => {
                   setOcrText(e.target.value)
-                  setImageFile(null) // Clear image when text is entered
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = ''
+                  // Clear files when text is entered
+                  if (e.target.value) {
+                    setFiles([])
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = ''
+                    }
                   }
                 }}
                 placeholder="Paste extracted text here..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="retrieved_context" className="block text-sm font-medium text-gray-700 mb-1">
+                Context for Images/PDFs (Optional)
+              </label>
+              <textarea
+                id="retrieved_context"
+                rows={3}
+                value={retrievedContext}
+                onChange={(e) => setRetrievedContext(e.target.value)}
+                placeholder="Add context about the images/PDFs to help generate better questions..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Provide additional context about the uploaded files to improve question generation
+              </p>
             </div>
 
             <div className="mb-4">
@@ -144,7 +355,7 @@ const Generate = () => {
                   type="checkbox"
                   checked={includeSolution}
                   onChange={(e) => setIncludeSolution(e.target.checked)}
-                  className="mr-2"
+                  className="mr-2 w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700">Include solution</span>
               </label>
@@ -158,7 +369,7 @@ const Generate = () => {
 
             <button
               type="submit"
-              disabled={loading || (!ocrText && !imageFile)}
+              disabled={loading || (!ocrText && files.length === 0)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Generating...' : 'Generate Question'}
@@ -207,4 +418,3 @@ const Generate = () => {
 }
 
 export default Generate
-

@@ -163,3 +163,55 @@ class EmbeddingService:
                 metadata_list.append(chunk_metadata)
 
             return self.batch_store(chunks, metadata_list)
+
+    def list_embeddings_by_class(self, class_id: str) -> List[Dict]:
+        """
+        List all embeddings for a specific class.
+
+        Args:
+            class_id: Class ID to filter by
+
+        Returns:
+            List of dictionaries with chunk_id, text, and metadata
+        """
+        try:
+            # Get all embeddings from collection
+            all_data = self.collection.get(include=["documents", "metadatas"])
+
+            # Filter by class_id in metadata
+            results = []
+            for i, metadata in enumerate(all_data["metadatas"]):
+                if metadata and metadata.get("class_id") == class_id:
+                    results.append(
+                        {
+                            "chunk_id": all_data["ids"][i],
+                            "text": all_data["documents"][i],
+                            "metadata": metadata,
+                        }
+                    )
+
+            return results
+        except Exception as e:
+            raise Exception(f"Failed to list embeddings by class: {str(e)}") from e
+
+    def delete_embedding(self, chunk_id: str) -> bool:
+        """
+        Delete an embedding by chunk_id.
+
+        Args:
+            chunk_id: Chunk ID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        try:
+            # Check if chunk exists
+            existing = self.collection.get(ids=[chunk_id])
+            if not existing["ids"]:
+                return False
+
+            # Delete the chunk
+            self.collection.delete(ids=[chunk_id])
+            return True
+        except Exception as e:
+            raise Exception(f"Failed to delete embedding: {str(e)}") from e

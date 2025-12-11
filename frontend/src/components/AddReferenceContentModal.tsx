@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { embedService } from '../services/embedService'
 import { ocrService } from '../services/ocrService'
-import { classService } from '../services/classService'
-import { Class } from '../types/class'
 import { EmbeddingRequest } from '../types/embedding'
 
 interface FileWithStatus {
@@ -13,20 +11,17 @@ interface FileWithStatus {
   extractedText?: string
 }
 
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+interface AddReferenceContentModalProps {
+  classId: string
+  onClose: () => void
+  onSuccess: () => void
+}
 
-const ReferenceContent = () => {
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    // Redirect to classes page since reference content is now managed per class
-    navigate('/classes', { replace: true })
-  }, [navigate])
-
-  return null
-  const [classes, setClasses] = useState<Class[]>([])
-  const [selectedClassId, setSelectedClassId] = useState<string>('')
+const AddReferenceContentModal = ({
+  classId,
+  onClose,
+  onSuccess,
+}: AddReferenceContentModalProps) => {
   const [examSource, setExamSource] = useState('')
   const [examType, setExamType] = useState('')
   const [files, setFiles] = useState<FileWithStatus[]>([])
@@ -34,20 +29,7 @@ const ReferenceContent = () => {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
-  useEffect(() => {
-    const loadClasses = async () => {
-      try {
-        const response = await classService.getAll()
-        setClasses(response.classes || [])
-      } catch (err) {
-        console.error('Failed to load classes:', err)
-        // Don't crash the page if classes fail to load
-        setClasses([])
-      }
-    }
-    loadClasses()
-  }, [])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isValidFile = (file: File): boolean => {
     const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
@@ -93,7 +75,6 @@ const ReferenceContent = () => {
         if (item.type.indexOf('image') !== -1) {
           const blob = item.getAsFile()
           if (blob) {
-            // Create a File object from the blob with a name
             const file = new File([blob], `pasted-image-${Date.now()}.png`, {
               type: blob.type,
             })
@@ -153,41 +134,22 @@ const ReferenceContent = () => {
   }
 
   const processFile = async (fileWithStatus: FileWithStatus, index: number): Promise<string> => {
-    // Update status to processing
     setFiles((prev) =>
       prev.map((f, i) => (i === index ? { ...f, status: 'processing', progress: 0 } : f))
     )
 
     try {
-      let extractedText = ''
+      setFiles((prev) =>
+        prev.map((f, i) => (i === index ? { ...f, progress: 50 } : f))
+      )
 
-      if (fileWithStatus.file.type === 'application/pdf') {
-        // For PDFs, use OCR service (backend now supports PDFs)
-        setFiles((prev) =>
-          prev.map((f, i) => (i === index ? { ...f, progress: 50 } : f))
-        )
+      const ocrResponse = await ocrService.extractText(fileWithStatus.file)
+      const extractedText = ocrResponse.text
 
-        const ocrResponse = await ocrService.extractText(fileWithStatus.file)
-        extractedText = ocrResponse.text
-
-        if (!extractedText || extractedText.trim().length === 0) {
-          throw new Error('No text extracted from PDF')
-        }
-      } else {
-        // For images, use OCR
-        setFiles((prev) =>
-          prev.map((f, i) => (i === index ? { ...f, progress: 50 } : f))
-        )
-
-        const ocrResponse = await ocrService.extractText(fileWithStatus.file)
-        extractedText = ocrResponse.text
-
-        if (!extractedText || extractedText.trim().length === 0) {
-          throw new Error('No text extracted from image')
-        }
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error('No text extracted from file')
       }
 
-      // Update with extracted text
       setFiles((prev) =>
         prev.map((f, i) =>
           i === index ? { ...f, status: 'success', progress: 100, extractedText } : f
@@ -216,7 +178,7 @@ const ReferenceContent = () => {
         chunk_id: chunkId,
         page: undefined,
         exam_type: examType || undefined,
-        class_id: selectedClassId || undefined,
+        class_id: classId,
       },
     }
 
@@ -237,12 +199,10 @@ const ReferenceContent = () => {
     const failed: string[] = []
 
     try {
-      // Process files sequentially to avoid overwhelming the API
       for (let i = 0; i < files.length; i++) {
         const fileWithStatus = files[i]
 
         if (fileWithStatus.status === 'success') {
-          // Already processed, just embed
           if (fileWithStatus.extractedText) {
             try {
               await embedText(fileWithStatus.extractedText, fileWithStatus.file.name)
@@ -265,16 +225,11 @@ const ReferenceContent = () => {
       }
 
       if (successful.length > 0) {
-        setSuccess(
-          `Successfully processed ${successful.length} file(s): ${successful.join(', ')}`
-        )
-        // Reset form after successful processing
+        setSuccess(`Successfully processed ${successful.length} file(s)`)
         setTimeout(() => {
-          setFiles([])
-          setExamSource('')
-          setExamType('')
-          setSelectedClassId('')
-        }, 3000)
+          onSuccess()
+          onClose()
+        }, 1500)
       }
 
       if (failed.length > 0) {
@@ -288,32 +243,24 @@ const ReferenceContent = () => {
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Add Reference Content</h1>
-
-      <div className="bg-white rounded-lg shadow p-6 max-w-4xl">
-        <p className="text-gray-600 mb-6">
-          Drag and drop images or PDFs, click to select files, or paste images from your clipboard.
-          The OCR functionality will parse and store them as reference material for question generation.
-        </p>
-
-        <div className="mb-6">
-          <label htmlFor="class" className="block text-sm font-medium text-gray-700 mb-1">
-            Class (Optional - to associate with a class)
-          </label>
-          <select
-            id="class"
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">Add Reference Content</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+            disabled={processing}
           >
-            <option value="">Select a class...</option>
-            {classes.map((classItem) => (
-              <option key={classItem.id} value={classItem.id}>
-                {classItem.name}
-              </option>
-            ))}
-          </select>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
         </div>
 
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -351,18 +298,18 @@ const ReferenceContent = () => {
           </div>
         </div>
 
-        {/* Drag and Drop Zone */}
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
             isDragging
               ? 'border-blue-500 bg-blue-50'
               : 'border-gray-300 bg-gray-50 hover:border-gray-400'
           }`}
         >
           <input
+            ref={fileInputRef}
             type="file"
             id="file-input"
             multiple
@@ -397,13 +344,12 @@ const ReferenceContent = () => {
           </label>
         </div>
 
-        {/* File List */}
         {files.length > 0 && (
-          <div className="mt-6">
+          <div className="mb-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">
               Files ({files.length})
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-48 overflow-y-auto">
               {files.map((fileWithStatus, index) => (
                 <div
                   key={index}
@@ -489,41 +435,40 @@ const ReferenceContent = () => {
         )}
 
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-sm">
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-sm">
             {success}
           </div>
         )}
 
-        <button
-          onClick={handleProcessAll}
-          disabled={processing || files.length === 0}
-          className="mt-6 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {processing
-            ? `Processing ${files.filter((f) => f.status === 'processing').length} file(s)...`
-            : `Process and Store ${files.length} File(s)`}
-        </button>
-      </div>
-
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-2">How it works:</h3>
-        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-          <li>Upload images or PDFs using drag and drop, file selection, or paste from clipboard</li>
-          <li>OCR extracts text from each image/PDF automatically</li>
-          <li>PDFs are processed page-by-page and all text is extracted</li>
-          <li>Extracted text is embedded into the vector database</li>
-          <li>When generating questions, similar content is retrieved automatically</li>
-          <li>This helps generate questions in the same style and format</li>
-        </ul>
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={processing}
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleProcessAll}
+            disabled={processing || files.length === 0}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {processing
+              ? `Processing ${files.filter((f) => f.status === 'processing').length} file(s)...`
+              : `Process and Store ${files.length} File(s)`}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-export default ReferenceContent
+export default AddReferenceContentModal
+

@@ -10,8 +10,8 @@ from fastapi import HTTPException, UploadFile
 from app.utils import file_utils
 
 
-class TestValidateImageFile:
-    """Tests for validate_image_file function."""
+class TestValidateUploadFile:
+    """Tests for validate_upload_file function."""
 
     def test_valid_png_file(self):
         """Test validation of valid PNG file."""
@@ -20,7 +20,7 @@ class TestValidateImageFile:
             file=io.BytesIO(b"fake png content"),
             headers={"content-type": "image/png"},
         )
-        result = file_utils.validate_image_file(file)
+        result = file_utils.validate_upload_file(file)
         assert result is True
 
     def test_valid_jpeg_file(self):
@@ -30,7 +30,7 @@ class TestValidateImageFile:
             file=io.BytesIO(b"fake jpg content"),
             headers={"content-type": "image/jpeg"},
         )
-        result = file_utils.validate_image_file(file)
+        result = file_utils.validate_upload_file(file)
         assert result is True
 
     def test_valid_jpg_file(self):
@@ -40,7 +40,17 @@ class TestValidateImageFile:
             file=io.BytesIO(b"fake jpg content"),
             headers={"content-type": "image/jpg"},
         )
-        result = file_utils.validate_image_file(file)
+        result = file_utils.validate_upload_file(file)
+        assert result is True
+
+    def test_valid_pdf_file(self):
+        """Test validation of valid PDF file."""
+        file = UploadFile(
+            filename="test.pdf",
+            file=io.BytesIO(b"%PDF-1.4 fake pdf content"),
+            headers={"content-type": "application/pdf"},
+        )
+        result = file_utils.validate_upload_file(file)
         assert result is True
 
     def test_invalid_file_type(self):
@@ -51,9 +61,35 @@ class TestValidateImageFile:
             headers={"content-type": "text/plain"},
         )
         with pytest.raises(HTTPException) as exc_info:
-            file_utils.validate_image_file(file)
+            file_utils.validate_upload_file(file)
         assert exc_info.value.status_code == 400
         assert "Invalid file type" in exc_info.value.detail
+
+    def test_malicious_file_extension(self):
+        """Test that file extension doesn't override MIME type validation."""
+        # Try to upload executable with image extension
+        file = UploadFile(
+            filename="malicious.exe.png",
+            file=io.BytesIO(b"executable content"),
+            headers={"content-type": "application/x-executable"},
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            file_utils.validate_upload_file(file)
+        assert exc_info.value.status_code == 400
+        assert "Invalid file type" in exc_info.value.detail
+
+    def test_empty_content_type(self):
+        """Test validation with empty content type."""
+        file = UploadFile(
+            filename="test.png",
+            file=io.BytesIO(b"content"),
+            headers={},
+        )
+        # Should handle None content_type gracefully
+        if file.content_type is None:
+            with pytest.raises(HTTPException) as exc_info:
+                file_utils.validate_upload_file(file)
+            assert exc_info.value.status_code == 400
 
 
 class TestSaveTempFile:
@@ -173,43 +209,15 @@ class TestGetFileSizeMB:
         assert size_mb == 0.0
 
 
-# Tests for PDF support (will work after PR #47 is merged)
-class TestValidateUploadFile:
-    """Tests for validate_upload_file function (PDF support)."""
-
-    def test_validate_pdf_file_if_exists(self):
-        """Test validation of PDF file if function exists."""
-        if hasattr(file_utils, "validate_upload_file"):
-            file = UploadFile(
-                filename="test.pdf",
-                file=io.BytesIO(b"fake pdf content"),
-                headers={"content-type": "application/pdf"},
-            )
-            result = file_utils.validate_upload_file(file)
-            assert result is True
-
-    def test_validate_upload_file_rejects_invalid(self):
-        """Test validate_upload_file rejects invalid types if function exists."""
-        if hasattr(file_utils, "validate_upload_file"):
-            file = UploadFile(
-                filename="test.txt",
-                file=io.BytesIO(b"text content"),
-                headers={"content-type": "text/plain"},
-            )
-            with pytest.raises(HTTPException) as exc_info:
-                file_utils.validate_upload_file(file)
-            assert exc_info.value.status_code == 400
 
 
 class TestConvertPdfToImages:
-    """Tests for convert_pdf_to_images function (PDF support)."""
+    """Tests for convert_pdf_to_images function."""
 
-    def test_convert_pdf_to_images_if_exists(self):
-        """Test PDF to images conversion if function exists."""
-        if hasattr(file_utils, "convert_pdf_to_images"):
-            # Create a minimal PDF file for testing
-            # This is a minimal valid PDF structure
-            pdf_content = b"""%PDF-1.4
+    def test_convert_pdf_to_images(self):
+        """Test PDF to images conversion."""
+        # Create a minimal PDF file for testing
+        pdf_content = b"""%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
@@ -231,23 +239,47 @@ startxref
 174
 %%EOF"""
 
-            # Save to temp file
-            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            temp_pdf_path = Path(temp_pdf.name)
-            temp_pdf.write(pdf_content)
-            temp_pdf.close()
+        # Save to temp file
+        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        temp_pdf_path = Path(temp_pdf.name)
+        temp_pdf.write(pdf_content)
+        temp_pdf.close()
 
-            try:
-                image_paths = file_utils.convert_pdf_to_images(temp_pdf_path)
-                # Should return a list of image paths
-                assert isinstance(image_paths, list)
+        try:
+            image_paths = file_utils.convert_pdf_to_images(temp_pdf_path)
+            # Should return a list of image paths
+            assert isinstance(image_paths, list)
+            assert len(image_paths) >= 1
+            # All paths should exist
+            for img_path in image_paths:
+                assert img_path.exists()
                 # Clean up generated images
-                for img_path in image_paths:
-                    if Path(img_path).exists():
-                        file_utils.cleanup_temp_file(Path(img_path))
-            except Exception:
-                # If PyMuPDF is not installed or PDF is invalid, that's okay for now
-                pass
-            finally:
-                if temp_pdf_path.exists():
-                    file_utils.cleanup_temp_file(temp_pdf_path)
+                file_utils.cleanup_temp_file(img_path)
+        except Exception as e:
+            # If PyMuPDF fails, that's a test failure
+            pytest.fail(f"PDF conversion failed: {e}")
+        finally:
+            if temp_pdf_path.exists():
+                file_utils.cleanup_temp_file(temp_pdf_path)
+
+    def test_convert_pdf_to_images_invalid_file(self):
+        """Test PDF conversion with invalid/corrupted PDF raises error."""
+        # Create an invalid PDF file
+        invalid_pdf_path = Path("/tmp/invalid_test.pdf")
+        invalid_pdf_path.write_bytes(b"Not a valid PDF content")
+
+        try:
+            # Should raise an exception for invalid PDF
+            with pytest.raises(Exception):  # fitz.open will raise an exception
+                file_utils.convert_pdf_to_images(invalid_pdf_path)
+        finally:
+            # Clean up
+            if invalid_pdf_path.exists():
+                invalid_pdf_path.unlink()
+
+    def test_convert_pdf_to_images_nonexistent_file(self):
+        """Test PDF conversion with non-existent file raises error."""
+        nonexistent_path = Path("/tmp/nonexistent_test.pdf")
+        # Should raise FileNotFoundError or similar
+        with pytest.raises(Exception):
+            file_utils.convert_pdf_to_images(nonexistent_path)

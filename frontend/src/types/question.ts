@@ -3,7 +3,7 @@ export interface Question {
   class_id: string
   question_text: string
   solution?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   source_image?: string
   created_at: string
   updated_at: string
@@ -11,7 +11,7 @@ export interface Question {
 
 export interface GenerateResponse {
   question: string
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
   processing_steps: string[]
   question_id?: string
   class_id?: string

@@ -36,11 +36,11 @@ class Settings(BaseSettings):
 
     # OpenAI Models
     ocr_model: str = Field(
-        default="gpt-4-vision-preview",
+        default="gpt-4o",
         description="OpenAI Vision model for OCR",
     )
     generation_model: str = Field(
-        default="gpt-4",
+        default="gpt-4o",
         description="OpenAI model for question generation",
     )
 
@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")
     log_level: str = Field(default="INFO", description="Logging level")
+    environment: str = Field(default="development", description="Environment (development/production)")
 
     # Limits
     max_file_size_mb: int = Field(default=10, description="Maximum file size in MB")
