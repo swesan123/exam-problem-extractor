@@ -1,8 +1,9 @@
 """SQLAlchemy database models for classes and questions."""
 
 from datetime import datetime
+from typing import Dict, Optional
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -67,3 +68,50 @@ class Question(Base):
 
     def __repr__(self):
         return f"<Question(id={self.id}, class_id={self.class_id})>"
+
+
+class ReferenceUploadJob(Base):
+    """Model for tracking reference content upload jobs."""
+
+    __tablename__ = "reference_upload_jobs"
+
+    id = Column(String, primary_key=True, index=True)
+    class_id = Column(
+        String, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    exam_source = Column(String, nullable=True)
+    exam_type = Column(String, nullable=True)
+
+    # Status tracking
+    status = Column(String, nullable=False, default="pending", index=True)  # pending, processing, completed, failed
+    progress = Column(Integer, nullable=False, default=0)  # 0-100
+
+    # File tracking
+    total_files = Column(Integer, nullable=False, default=0)
+    processed_files = Column(Integer, nullable=False, default=0)
+    failed_files = Column(Integer, nullable=False, default=0)
+
+    # Per-file status (JSON)
+    file_statuses = Column(JSON, nullable=True, default=dict)
+    # Format: {
+    #   "filename1.pdf": {"status": "processing", "progress": 50, "error": null},
+    #   "filename2.pdf": {"status": "completed", "progress": 100, "error": null}
+    # }
+
+    # Error handling
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self):
+        return f"<ReferenceUploadJob(id={self.id}, status={self.status}, progress={self.progress}%)>"
