@@ -7,12 +7,9 @@ from app.models.embedding_models import EmbeddingRequest, EmbeddingResponse
 from app.services.embedding_service import EmbeddingService
 
 router = APIRouter(prefix="/embed", tags=["embedding"])
-# Limiter will be set by main.py after app initialization
-limiter = None
 
 
 @router.post("", response_model=EmbeddingResponse, status_code=status.HTTP_200_OK)
-@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
 async def create_embedding(request: Request, embedding_request: EmbeddingRequest):
     """
     Generate and store embedding for text.

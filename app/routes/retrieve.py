@@ -8,12 +8,9 @@ from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 
 router = APIRouter(prefix="/retrieve", tags=["retrieval"])
-# Limiter will be set by main.py after app initialization
-limiter = None
 
 
 @router.post("", response_model=RetrieveResponse, status_code=status.HTTP_200_OK)
-@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
 async def retrieve_similar(request: Request, retrieve_request: RetrieveRequest):
     """
     Retrieve similar exam content from vector database.

@@ -24,12 +24,9 @@ from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generation"])
-# Limiter will be set by main.py after app initialization
-limiter = None
 
 
 @router.post("", response_model=GenerateResponse, status_code=status.HTTP_200_OK)
-@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
 async def generate_question(
     request: Request,
     ocr_text: Optional[str] = Form(None),
