@@ -244,44 +244,84 @@ def test_list_questions_pagination(client: TestClient, sample_class: Class):
     assert len(data2["questions"]) >= 2
 
 
-def test_download_question_txt(client: TestClient, sample_question: Question):
+def test_download_question_txt(client: TestClient, sample_class: Class):
     """Test downloading a question as TXT."""
-    response = client.get(f"/api/questions/{sample_question.id}/download?format=txt")
+    # Create a question first
+    question_data = {
+        "class_id": sample_class.id,
+        "question_text": "Test question for download",
+    }
+    create_response = client.post(
+        f"/api/questions/classes/{sample_class.id}/questions", json=question_data
+    )
+    question_id = create_response.json()["id"]
+
+    response = client.get(f"/api/questions/{question_id}/download?format=txt")
 
     assert response.status_code == 200
-    assert response.headers["content-type"] == "text/plain"
+    assert "text/plain" in response.headers["content-type"]
     assert "attachment" in response.headers["content-disposition"]
-    assert sample_question.question_text in response.text
+    assert "Test question for download" in response.text
 
 
-def test_download_question_pdf(client: TestClient, sample_question: Question):
+def test_download_question_pdf(client: TestClient, sample_class: Class):
     """Test downloading a question as PDF."""
-    response = client.get(f"/api/questions/{sample_question.id}/download?format=pdf")
+    # Create a question first
+    question_data = {
+        "class_id": sample_class.id,
+        "question_text": "Test question for PDF download",
+    }
+    create_response = client.post(
+        f"/api/questions/classes/{sample_class.id}/questions", json=question_data
+    )
+    question_id = create_response.json()["id"]
+
+    response = client.get(f"/api/questions/{question_id}/download?format=pdf")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
 
 
-def test_download_question_with_solution(client: TestClient, sample_question: Question):
+def test_download_question_with_solution(client: TestClient, sample_class: Class):
     """Test downloading a question with solution."""
+    # Create a question first
+    question_data = {
+        "class_id": sample_class.id,
+        "question_text": "Test question with solution",
+    }
+    create_response = client.post(
+        f"/api/questions/classes/{sample_class.id}/questions", json=question_data
+    )
+    question_id = create_response.json()["id"]
+
     # Update question to have a solution
     client.put(
-        f"/api/questions/{sample_question.id}",
+        f"/api/questions/{question_id}",
         json={"solution": "Test solution"},
     )
 
     response = client.get(
-        f"/api/questions/{sample_question.id}/download?format=txt&include_solution=true"
+        f"/api/questions/{question_id}/download?format=txt&include_solution=true"
     )
 
     assert response.status_code == 200
     assert "Test solution" in response.text
 
 
-def test_download_question_invalid_format(client: TestClient, sample_question: Question):
+def test_download_question_invalid_format(client: TestClient, sample_class: Class):
     """Test downloading with invalid format."""
-    response = client.get(f"/api/questions/{sample_question.id}/download?format=invalid")
+    # Create a question first
+    question_data = {
+        "class_id": sample_class.id,
+        "question_text": "Test question",
+    }
+    create_response = client.post(
+        f"/api/questions/classes/{sample_class.id}/questions", json=question_data
+    )
+    question_id = create_response.json()["id"]
+
+    response = client.get(f"/api/questions/{question_id}/download?format=invalid")
 
     assert response.status_code == 400
     assert "Unsupported format" in response.json()["detail"]
