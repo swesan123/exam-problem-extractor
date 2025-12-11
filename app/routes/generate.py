@@ -1,25 +1,21 @@
 """Generation route endpoint."""
-
 import json
 import logging
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
-                     UploadFile, status)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.database import get_db
 from app.models.generation_models import GenerateResponse
 from app.models.question_models import QuestionCreate
-from app.services.embedding_service import EmbeddingService
 from app.services.generation_service import GenerationService
 from app.services.ocr_service import OCRService
-from app.services.question_service import QuestionService
+from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
-from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
-                                   validate_image_file)
+from app.services.question_service import QuestionService
+from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +24,6 @@ router = APIRouter(prefix="/generate", tags=["generation"])
 
 @router.post("", response_model=GenerateResponse, status_code=status.HTTP_200_OK)
 async def generate_question(
-    request: Request,
     ocr_text: Optional[str] = Form(None),
     image_file: Optional[UploadFile] = File(None),
     retrieved_context: Optional[str] = Form(None),  # JSON string
@@ -69,7 +64,7 @@ async def generate_question(
 
         # Step 1: OCR extraction (if image provided)
         if image_file:
-            validate_image_file(image_file)
+            validate_upload_file(image_file)
             temp_path = save_temp_file(image_file)
             ocr_service = OCRService()
             ocr_text = ocr_service.extract_text(temp_path)
@@ -85,6 +80,7 @@ async def generate_question(
         context_list: List[str] = []
         if retrieved_context:
             # Parse JSON string if provided
+            import json
             try:
                 context_list = json.loads(retrieved_context)
                 if not isinstance(context_list, list):
@@ -123,12 +119,12 @@ async def generate_question(
         if class_id:
             try:
                 question_service = QuestionService(db)
-
+                
                 # Extract solution if included
                 solution_text = None
                 if include_solution and result.get("solution"):
                     solution_text = result["solution"]
-
+                
                 # Create question data
                 question_data = QuestionCreate(
                     class_id=class_id,
@@ -141,15 +137,13 @@ async def generate_question(
                     },
                     source_image=str(temp_path) if temp_path else None,
                 )
-
+                
                 saved_question = question_service.create_question(question_data)
                 question_id = saved_question.id
                 saved_class_id = class_id
-
-                logger.info(
-                    f"Saved generated question {question_id} to class {class_id}"
-                )
-
+                
+                logger.info(f"Saved generated question {question_id} to class {class_id}")
+                
             except ValueError as e:
                 # Class not found - log but don't fail the request
                 logger.warning(f"Failed to save question to class {class_id}: {e}")
@@ -176,3 +170,4 @@ async def generate_question(
         # Clean up temporary file
         if temp_path:
             cleanup_temp_file(temp_path)
+

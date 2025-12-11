@@ -2,16 +2,19 @@
 
 import tempfile
 from pathlib import Path
+from typing import List
 
+import fitz  # PyMuPDF
 from fastapi import HTTPException, UploadFile, status
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
+ALLOWED_PDF_TYPES = {"application/pdf"}
 MAX_FILE_SIZE_MB = 10
 
 
-def validate_image_file(file: UploadFile) -> bool:
+def validate_upload_file(file: UploadFile) -> bool:
     """
-    Validate that the uploaded file is a valid image.
+    Validate that the uploaded file is a supported type (image or PDF).
 
     Args:
         file: FastAPI UploadFile object
@@ -22,15 +25,16 @@ def validate_image_file(file: UploadFile) -> bool:
     Raises:
         HTTPException: If file type or size is invalid
     """
-    # Check MIME type
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
+    if file.content_type not in ALLOWED_IMAGE_TYPES | ALLOWED_PDF_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed types: PNG, JPG, JPEG. Got: {file.content_type}",
+            detail=(
+                "Invalid file type. Allowed types: PNG, JPG, JPEG, PDF. "
+                f"Got: {file.content_type}"
+            ),
         )
 
-    # Note: File size validation should be done at the FastAPI level
-    # or by reading the file content and checking size
+    # Note: File size validation is performed after saving to disk
     return True
 
 
@@ -59,7 +63,7 @@ def save_temp_file(file: UploadFile) -> Path:
         if size_mb > MAX_FILE_SIZE_MB:
             cleanup_temp_file(temp_path)
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"File size ({size_mb:.2f} MB) exceeds maximum allowed size ({MAX_FILE_SIZE_MB} MB)",
             )
 
@@ -87,6 +91,33 @@ def cleanup_temp_file(path: Path) -> None:
     except Exception:
         # Ignore errors during cleanup
         pass
+
+
+def convert_pdf_to_images(pdf_path: Path) -> List[Path]:
+    """
+    Convert PDF pages to temporary image files.
+
+    Args:
+        pdf_path: Path to the PDF file
+
+    Returns:
+        List of paths to generated image files (one per page)
+    """
+    image_paths: List[Path] = []
+    doc = fitz.open(pdf_path)
+
+    try:
+        for page_index in range(len(doc)):
+            page = doc.load_page(page_index)
+            pix = page.get_pixmap()
+            image_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            image_path = Path(image_temp.name)
+            image_path.write_bytes(pix.tobytes("png"))
+            image_paths.append(image_path)
+    finally:
+        doc.close()
+
+    return image_paths
 
 
 def get_file_size_mb(path: Path) -> float:

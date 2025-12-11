@@ -1,11 +1,8 @@
 """Database connection and session management."""
-
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from pathlib import Path
 from typing import Generator
-
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 
@@ -30,7 +27,7 @@ Base = declarative_base()
 def get_db() -> Generator[Session, None, None]:
     """
     Dependency function to get database session.
-
+    
     Yields:
         Database session
     """
@@ -45,14 +42,14 @@ def init_db() -> None:
     """
     Initialize database by creating all tables.
     Should be called on application startup.
-
+    
     Creates the data directory if it doesn't exist and creates all
     database tables defined in the models.
     """
     # Ensure data directory exists
     data_dir = _db_path.parent
     data_dir.mkdir(parents=True, exist_ok=True)
-
+    
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
@@ -63,3 +60,4 @@ def drop_db() -> None:
     Use with caution - only for development/testing.
     """
     Base.metadata.drop_all(bind=engine)
+

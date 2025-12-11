@@ -1,8 +1,11 @@
 """Unit tests for utility functions."""
 
+import io
+import tempfile
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException, UploadFile
 
 from app.utils import chunking, file_utils, text_cleaning
 
@@ -42,3 +45,106 @@ def test_smart_chunk():
     text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
     chunks = chunking.smart_chunk(text, max_size=50)
     assert len(chunks) >= 1
+
+
+class TestFileUtils:
+    """Tests for file utility functions."""
+
+    def test_validate_upload_file_image(self):
+        """Test validation of image files."""
+        file = UploadFile(
+            filename="test.png",
+            file=io.BytesIO(b"fake image content"),
+            headers={"content-type": "image/png"},
+        )
+        result = file_utils.validate_upload_file(file)
+        assert result is True
+
+    def test_validate_upload_file_pdf(self):
+        """Test validation of PDF files."""
+        file = UploadFile(
+            filename="test.pdf",
+            file=io.BytesIO(b"%PDF-1.4 fake pdf content"),
+            headers={"content-type": "application/pdf"},
+        )
+        result = file_utils.validate_upload_file(file)
+        assert result is True
+
+    def test_validate_upload_file_invalid(self):
+        """Test validation rejects invalid file types."""
+        file = UploadFile(
+            filename="test.txt",
+            file=io.BytesIO(b"text content"),
+            headers={"content-type": "text/plain"},
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            file_utils.validate_upload_file(file)
+        assert exc_info.value.status_code == 400
+
+    def test_convert_pdf_to_images(self):
+        """Test PDF to images conversion."""
+        # Create a minimal valid PDF
+        pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+174
+%%EOF"""
+
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(pdf_content)
+            pdf_path = Path(tmp.name)
+
+        try:
+            # Convert PDF to images
+            image_paths = file_utils.convert_pdf_to_images(pdf_path)
+
+            # Should create at least one image
+            assert len(image_paths) >= 1
+            # All paths should exist
+            for img_path in image_paths:
+                assert img_path.exists()
+                # Clean up
+                file_utils.cleanup_temp_file(img_path)
+        finally:
+            # Clean up PDF
+            if pdf_path.exists():
+                pdf_path.unlink()
+
+    def test_convert_pdf_to_images_invalid_file(self):
+        """Test PDF conversion with invalid/corrupted PDF raises error."""
+        # Create an invalid PDF file
+        invalid_pdf_path = Path("/tmp/invalid.pdf")
+        invalid_pdf_path.write_bytes(b"Not a valid PDF content")
+
+        try:
+            # Should raise an exception for invalid PDF
+            with pytest.raises(Exception):  # fitz.open will raise an exception
+                file_utils.convert_pdf_to_images(invalid_pdf_path)
+        finally:
+            # Clean up
+            if invalid_pdf_path.exists():
+                invalid_pdf_path.unlink()
+
+    def test_convert_pdf_to_images_nonexistent_file(self):
+        """Test PDF conversion with non-existent file raises error."""
+        nonexistent_path = Path("/tmp/nonexistent.pdf")
+        # Should raise FileNotFoundError or similar
+        with pytest.raises(Exception):
+            file_utils.convert_pdf_to_images(nonexistent_path)
