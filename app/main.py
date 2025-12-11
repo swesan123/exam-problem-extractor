@@ -12,7 +12,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import classes, questions
+from app.api import classes, questions, reference_content
 from app.config import settings
 from app.exceptions import (EmbeddingException, ExamProblemExtractorException,
                             GenerationException, OCRException,
@@ -186,6 +186,7 @@ app.include_router(retrieve.router)
 app.include_router(generate.router)
 app.include_router(classes.router)
 app.include_router(questions.router)
+app.include_router(reference_content.router)
 
 # Apply rate limiting to route endpoints
 # Get rate limit string based on settings

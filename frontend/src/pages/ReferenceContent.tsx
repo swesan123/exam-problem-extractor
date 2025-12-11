@@ -28,12 +28,45 @@ const ReferenceContent = () => {
     const loadClasses = async () => {
       try {
         const response = await classService.getAll()
-        setClasses(response.classes)
+        setClasses(response.classes || [])
       } catch (err) {
         console.error('Failed to load classes:', err)
+        // Don't crash the page if classes fail to load
+        setClasses([])
       }
     }
     loadClasses()
+  }, [])
+
+  const isValidFile = (file: File): boolean => {
+    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+    const validPdfType = 'application/pdf'
+    return validImageTypes.includes(file.type) || file.type === validPdfType
+  }
+
+  const handleFiles = useCallback((fileList: FileList | File[]) => {
+    const newFiles: FileWithStatus[] = []
+    const filesArray = Array.from(fileList)
+
+    filesArray.forEach((file) => {
+      if (!isValidFile(file)) {
+        setError(`Invalid file type: ${file.name}. Please upload images (PNG, JPG, JPEG) or PDFs.`)
+        return
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError(`File too large: ${file.name}. Maximum size is 10MB.`)
+        return
+      }
+      newFiles.push({
+        file,
+        status: 'pending',
+      })
+    })
+
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles])
+      setError(null)
+    }
   }, [])
 
   // Handle paste from clipboard
@@ -69,37 +102,6 @@ const ReferenceContent = () => {
       window.removeEventListener('paste', handlePaste)
     }
   }, [handleFiles])
-
-  const isValidFile = (file: File): boolean => {
-    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
-    const validPdfType = 'application/pdf'
-    return validImageTypes.includes(file.type) || file.type === validPdfType
-  }
-
-  const handleFiles = useCallback((fileList: FileList | File[]) => {
-    const newFiles: FileWithStatus[] = []
-    const filesArray = Array.from(fileList)
-
-    filesArray.forEach((file) => {
-      if (!isValidFile(file)) {
-        setError(`Invalid file type: ${file.name}. Please upload images (PNG, JPG, JPEG) or PDFs.`)
-        return
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        setError(`File too large: ${file.name}. Maximum size is 10MB.`)
-        return
-      }
-      newFiles.push({
-        file,
-        status: 'pending',
-      })
-    })
-
-    if (newFiles.length > 0) {
-      setFiles((prev) => [...prev, ...newFiles])
-      setError(null)
-    }
-  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -292,7 +294,7 @@ const ReferenceContent = () => {
             id="class"
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Select a class...</option>
             {classes.map((classItem) => (
@@ -314,7 +316,7 @@ const ReferenceContent = () => {
               value={examSource}
               onChange={(e) => setExamSource(e.target.value)}
               placeholder="e.g., '2023 Final Exam', 'Practice Test 1'"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -326,7 +328,7 @@ const ReferenceContent = () => {
               id="exam_type"
               value={examType}
               onChange={(e) => setExamType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select type...</option>
               <option value="practice_exam">Practice Exam</option>

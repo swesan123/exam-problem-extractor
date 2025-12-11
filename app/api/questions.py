@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -329,4 +329,150 @@ async def delete_question(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete question: {str(e)}",
+        ) from e
+
+
+@router.get("/{question_id}/download", status_code=status.HTTP_200_OK)
+async def download_question(
+    question_id: str,
+    format: str = Query("txt", description="Export format (txt, pdf, docx, json)"),
+    include_solution: bool = Query(False, description="Include solution in export"),
+    db: Session = Depends(get_db),
+):
+    """
+    Download a single question in specified format.
+
+    Args:
+        question_id: Question ID
+        format: Export format (txt, pdf, docx, json)
+        include_solution: Whether to include solution
+        db: Database session
+
+    Returns:
+        File download response
+    """
+    try:
+        from app.services.export_service import ExportFormat, ExportService
+
+        service = QuestionService(db)
+        question = service.get_question(question_id)
+
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Question with ID '{question_id}' not found",
+            )
+
+        # Validate format
+        try:
+            export_format = ExportFormat(format.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported format '{format}'. Supported formats: txt, pdf, docx, json",
+            )
+
+        # Export question
+        export_service = ExportService()
+        content, content_type, file_ext = export_service.export_questions(
+            [question], export_format, include_solution
+        )
+
+        # Generate filename
+        filename = f"question_{question_id}.{file_ext}"
+
+        # Return file response
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to download question: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download question: {str(e)}",
+        ) from e
+
+
+@router.get("/{question_id}/download", status_code=status.HTTP_200_OK)
+async def download_question(
+    question_id: str,
+    format: str = Query("txt", description="Export format (txt, pdf, docx, json)"),
+    include_solution: bool = Query(False, description="Include solution in export"),
+    db: Session = Depends(get_db),
+):
+    """
+    Download a single question in specified format.
+
+    Args:
+        question_id: Question ID
+        format: Export format (txt, pdf, docx, json)
+        include_solution: Whether to include solution
+        db: Database session
+
+    Returns:
+        File download response
+    """
+    try:
+        from app.services.export_service import ExportFormat, ExportService
+
+        service = QuestionService(db)
+        question = service.get_question(question_id)
+
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Question with ID '{question_id}' not found",
+            )
+
+        # Validate format
+        try:
+            export_format = ExportFormat(format.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported format '{format}'. Supported formats: txt, pdf, docx, json",
+            )
+
+        # Export question
+        export_service = ExportService()
+        content, content_type, file_ext = export_service.export_questions(
+            [question], export_format, include_solution
+        )
+
+        # Generate filename
+        filename = f"question_{question_id}.{file_ext}"
+
+        # Return file response
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to download question: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download question: {str(e)}",
         ) from e

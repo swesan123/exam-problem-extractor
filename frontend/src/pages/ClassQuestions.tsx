@@ -14,6 +14,7 @@ const ClassQuestions = () => {
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,6 +54,30 @@ const ClassQuestions = () => {
       setError(err instanceof Error ? err.message : 'Failed to export questions')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleDelete = async (questionId: string) => {
+    if (!confirm('Are you sure you want to delete this question?')) return
+
+    try {
+      setDeletingId(questionId)
+      await questionService.delete(questionId)
+      // Reload questions
+      const questionsData = await questionService.getByClass(id!)
+      setQuestions(questionsData.questions)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete question')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDownload = async (questionId: string, format: 'txt' | 'pdf' | 'docx' | 'json' = 'txt') => {
+    try {
+      await questionService.download(questionId, format, false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download question')
     }
   }
 
@@ -99,7 +124,7 @@ const ClassQuestions = () => {
           <select
             onChange={(e) => handleExport(e.target.value as ExportFormat)}
             disabled={exporting || questions.length === 0}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           >
             <option value="">Export Format...</option>
             <option value="txt">TXT</option>
@@ -119,7 +144,7 @@ const ClassQuestions = () => {
           placeholder="Search questions..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -152,9 +177,48 @@ const ClassQuestions = () => {
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-900">Question</h3>
-                <span className="text-xs text-gray-500">
-                  {new Date(question.created_at).toLocaleDateString()}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">
+                    {new Date(question.created_at).toLocaleDateString()}
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    <select
+                      onChange={(e) => handleDownload(question.id, e.target.value as 'txt' | 'pdf' | 'docx' | 'json')}
+                      className="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">Download...</option>
+                      <option value="txt">TXT</option>
+                      <option value="pdf">PDF</option>
+                      <option value="docx">DOCX</option>
+                      <option value="json">JSON</option>
+                    </select>
+                    <button
+                      onClick={() => handleDelete(question.id)}
+                      disabled={deletingId === question.id}
+                      className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                      title="Delete question"
+                    >
+                      {deletingId === question.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                      ) : (
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
               <p className="text-gray-700 whitespace-pre-wrap mb-4">
                 {question.question_text}
