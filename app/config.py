@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     # Required
     openai_api_key: str = Field(..., description="OpenAI API key")
 
+    # Database
+    database_path: Path = Field(
+        default=Path("./data/app.db"),
+        description="Path to SQLite database file",
+    )
+
     # Vector Database
     vector_db_path: Path = Field(
         default=Path("./vector_store/chroma_index"),
@@ -48,7 +54,9 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")
     log_level: str = Field(default="INFO", description="Logging level")
-    environment: str = Field(default="development", description="Environment (development/production)")
+    environment: str = Field(
+        default="development", description="Environment (development/production)"
+    )
 
     # Limits
     max_file_size_mb: int = Field(default=10, description="Maximum file size in MB")
@@ -68,9 +76,7 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://localhost:5173",
         description="Comma-separated list of allowed CORS origins",
     )
-    rate_limit_enabled: bool = Field(
-        default=True, description="Enable rate limiting"
-    )
+    rate_limit_enabled: bool = Field(default=True, description="Enable rate limiting")
     rate_limit_per_minute: int = Field(
         default=60, ge=1, description="Rate limit per minute per IP"
     )
@@ -78,6 +84,9 @@ class Settings(BaseSettings):
     def __init__(self, **kwargs):
         """Initialize settings and validate required fields."""
         super().__init__(**kwargs)
+        # Ensure database_path is a Path object
+        if isinstance(self.database_path, str):
+            self.database_path = Path(self.database_path)
         # Ensure vector_db_path is a Path object
         if isinstance(self.vector_db_path, str):
             self.vector_db_path = Path(self.vector_db_path)

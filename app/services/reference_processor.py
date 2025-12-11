@@ -2,11 +2,11 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from threading import Semaphore
 from typing import Dict, List, Optional
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import ReferenceUploadJob
@@ -50,14 +50,21 @@ class ReferenceProcessor:
         """
         try:
             # Load job from database
-            job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+            job = (
+                db.query(ReferenceUploadJob)
+                .filter(ReferenceUploadJob.id == job_id)
+                .first()
+            )
             if not job:
                 logger.error(f"Job {job_id} not found")
                 return
 
             job.status = "processing"
             job.total_files = len(file_paths)
-            job.file_statuses = {str(path.name): {"status": "pending", "progress": 0} for path in file_paths}
+            job.file_statuses = {
+                str(path.name): {"status": "pending", "progress": 0}
+                for path in file_paths
+            }
             db.commit()
 
             # Process files in parallel
@@ -79,12 +86,18 @@ class ReferenceProcessor:
                     self._update_file_status(db, job_id, filename, "completed", 100)
                     self._increment_processed_files(db, job_id)
                 except Exception as e:
-                    logger.error(f"Failed to process file {filename}: {e}", exc_info=True)
+                    logger.error(
+                        f"Failed to process file {filename}: {e}", exc_info=True
+                    )
                     self._update_file_status(db, job_id, filename, "failed", 0, str(e))
                     self._increment_failed_files(db, job_id)
 
             # Mark job as completed
-            job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+            job = (
+                db.query(ReferenceUploadJob)
+                .filter(ReferenceUploadJob.id == job_id)
+                .first()
+            )
             if job:
                 if job.processed_files > 0:
                     job.status = "completed"
@@ -92,12 +105,16 @@ class ReferenceProcessor:
                 else:
                     job.status = "failed"
                     job.error_message = "All files failed to process"
-                job.completed_at = func.now()
+                job.completed_at = datetime.utcnow()
                 db.commit()
 
         except Exception as e:
             logger.error(f"Job {job_id} processing failed: {e}", exc_info=True)
-            job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+            job = (
+                db.query(ReferenceUploadJob)
+                .filter(ReferenceUploadJob.id == job_id)
+                .first()
+            )
             if job:
                 job.status = "failed"
                 job.error_message = str(e)
@@ -206,7 +223,9 @@ class ReferenceProcessor:
         error: Optional[str] = None,
     ) -> None:
         """Update status for a single file in the job."""
-        job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        job = (
+            db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        )
         if job:
             if job.file_statuses is None:
                 job.file_statuses = {}
@@ -219,20 +238,25 @@ class ReferenceProcessor:
             total_progress = sum(
                 f.get("progress", 0) for f in job.file_statuses.values()
             )
-            job.progress = int(total_progress / len(job.file_statuses)) if job.file_statuses else 0
+            job.progress = (
+                int(total_progress / len(job.file_statuses)) if job.file_statuses else 0
+            )
             db.commit()
 
     def _increment_processed_files(self, db: Session, job_id: str) -> None:
         """Increment processed files count."""
-        job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        job = (
+            db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        )
         if job:
             job.processed_files += 1
             db.commit()
 
     def _increment_failed_files(self, db: Session, job_id: str) -> None:
         """Increment failed files count."""
-        job = db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        job = (
+            db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        )
         if job:
             job.failed_files += 1
             db.commit()
-

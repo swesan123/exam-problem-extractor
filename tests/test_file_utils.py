@@ -209,8 +209,6 @@ class TestGetFileSizeMB:
         assert size_mb == 0.0
 
 
-
-
 class TestConvertPdfToImages:
     """Tests for convert_pdf_to_images function."""
 

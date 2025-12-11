@@ -1,39 +1,49 @@
 """Database connection and session management."""
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
 from pathlib import Path
 from typing import Generator
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
 from app.config import settings
 
-# Database URL - SQLite file (use absolute path)
-_db_path = Path("./data/app.db").resolve()
+# Database URL - SQLite file (use absolute path from config)
+# Resolve to absolute path to ensure consistency across different working directories
+_db_path = settings.database_path.resolve()
 DATABASE_URL = f"sqlite:///{_db_path}"
 
-# Create engine
+# Create engine with SQLite-specific configuration
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Needed for SQLite
-    echo=False,  # Set to True for SQL query logging
+    connect_args={"check_same_thread": False},  # Needed for SQLite multi-threading
+    echo=False,  # Set to True for SQL query logging (useful for debugging)
 )
 
-# Session factory
+# Session factory - creates new sessions on each call
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
+# Base class for all database models
 Base = declarative_base()
 
 
 def get_db() -> Generator[Session, None, None]:
     """
     Dependency function to get database session.
-    
+
     Yields:
         Database session
+
+    Note: Services are responsible for calling commit() explicitly.
+    This function only ensures proper session cleanup and rollback on exceptions.
     """
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        # Rollback on any exception to prevent partial commits
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -42,14 +52,14 @@ def init_db() -> None:
     """
     Initialize database by creating all tables.
     Should be called on application startup.
-    
+
     Creates the data directory if it doesn't exist and creates all
     database tables defined in the models.
     """
     # Ensure data directory exists
     data_dir = _db_path.parent
     data_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
@@ -61,3 +71,6 @@ def drop_db() -> None:
     """
     Base.metadata.drop_all(bind=engine)
 
+
+# Export _db_path for logging/debugging (read-only access)
+__all__ = ["get_db", "init_db", "drop_db", "Base", "SessionLocal", "engine", "_db_path"]

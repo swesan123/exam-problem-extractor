@@ -5,7 +5,8 @@ from pathlib import Path
 from threading import Thread
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, UploadFile,
+                     status)
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -154,7 +155,9 @@ async def upload_reference_content(
             try:
                 _processor.process_job(job.id, file_paths, metadata, background_db)
             except Exception as e:
-                logger.error(f"Background processing failed for job {job.id}: {e}", exc_info=True)
+                logger.error(
+                    f"Background processing failed for job {job.id}: {e}", exc_info=True
+                )
             finally:
                 background_db.close()
 

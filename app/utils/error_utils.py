@@ -21,7 +21,10 @@ def sanitize_error_message(error_message: str, is_production: bool = False) -> s
 
     # Patterns to redact
     patterns = [
-        (r"sk-[a-zA-Z0-9]{10,}", "sk-***"),  # OpenAI API keys (minimum 10 chars after sk-)
+        (
+            r"sk-[a-zA-Z0-9]{10,}",
+            "sk-***",
+        ),  # OpenAI API keys (minimum 10 chars after sk-)
         (r"api[_-]?key[=:]\s*[a-zA-Z0-9_-]+", "api_key=***", re.IGNORECASE),
         (r"password[=:]\s*[^\s]+", "password=***", re.IGNORECASE),
         (r"token[=:]\s*[a-zA-Z0-9_-]+", "token=***", re.IGNORECASE),
@@ -31,7 +34,12 @@ def sanitize_error_message(error_message: str, is_production: bool = False) -> s
     sanitized = error_message
     for pattern in patterns:
         if isinstance(pattern, tuple):
-            sanitized = re.sub(pattern[0], pattern[1], sanitized, flags=pattern[2] if len(pattern) > 2 else 0)
+            sanitized = re.sub(
+                pattern[0],
+                pattern[1],
+                sanitized,
+                flags=pattern[2] if len(pattern) > 2 else 0,
+            )
         else:
             sanitized = re.sub(pattern[0], pattern[1], sanitized)
 
@@ -63,7 +71,7 @@ def get_safe_error_detail(error: Exception, is_production: bool = False) -> str:
     if is_production:
         technical_indicators = [
             "traceback",
-            "file \"",
+            'file "',
             "line ",
             "module",
             "import",
@@ -74,4 +82,3 @@ def get_safe_error_detail(error: Exception, is_production: bool = False) -> str:
             return "An internal error occurred. Please try again later."
 
     return sanitized
-

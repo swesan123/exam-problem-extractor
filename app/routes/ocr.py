@@ -8,8 +8,12 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
 from app.models.ocr_models import OCRResponse
 from app.services.ocr_service import OCRService
-from app.utils.file_utils import (cleanup_temp_file, convert_pdf_to_images,
-                                  save_temp_file, validate_upload_file)
+from app.utils.file_utils import (
+    cleanup_temp_file,
+    convert_pdf_to_images,
+    save_temp_file,
+    validate_upload_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +122,7 @@ async def extract_text(request: Request, file: UploadFile = File(...)):
         # Sanitize the full error message, not just the exception
         full_error_msg = f"OCR processing failed: {str(e)}"
         from app.utils.error_utils import sanitize_error_message
+
         safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -59,7 +59,9 @@ class JobService:
         self.db.add(job)
         self.db.commit()
         self.db.refresh(job)
-        logger.info(f"Created job {job_id} for class {class_id} with {total_files} files")
+        logger.info(
+            f"Created job {job_id} for class {class_id} with {total_files} files"
+        )
         return job
 
     def get_job(self, job_id: str) -> Optional[ReferenceUploadJob]:
@@ -72,7 +74,11 @@ class JobService:
         Returns:
             Job if found, None otherwise
         """
-        return self.db.query(ReferenceUploadJob).filter(ReferenceUploadJob.id == job_id).first()
+        return (
+            self.db.query(ReferenceUploadJob)
+            .filter(ReferenceUploadJob.id == job_id)
+            .first()
+        )
 
     def list_class_jobs(self, class_id: str) -> List[ReferenceUploadJob]:
         """
@@ -90,4 +96,3 @@ class JobService:
             .order_by(ReferenceUploadJob.created_at.desc())
             .all()
         )
-

@@ -122,3 +122,116 @@ def test_delete_embedding_not_found(mock_openai_client, mock_chromadb):
 
     assert result is False
     mock_collection.delete.assert_not_called()
+
+
+def test_store_embedding_filters_none_values(mock_openai_client, mock_chromadb):
+    """Test that None values in metadata are filtered out before storing."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+    embedding = [0.1] * 1536
+
+    # Metadata with None values (common when optional fields are not provided)
+    metadata = {
+        "source": "test",
+        "chunk_id": "chunk_1",
+        "exam_source": None,  # Optional field not provided
+        "exam_type": None,  # Optional field not provided
+        "class_id": "class_1",
+        "timestamp": "2024-01-01",
+    }
+
+    chunk_id = service.store_embedding("test text", embedding, metadata)
+
+    assert chunk_id == "chunk_1"
+    mock_collection.add.assert_called_once()
+
+    # Verify that the call was made with cleaned metadata (no None values)
+    call_args = mock_collection.add.call_args
+    stored_metadata = call_args.kwargs["metadatas"][0]
+
+    # None values should be filtered out
+    assert "exam_source" not in stored_metadata
+    assert "exam_type" not in stored_metadata
+
+    # Valid values should be preserved
+    assert stored_metadata["source"] == "test"
+    assert stored_metadata["chunk_id"] == "chunk_1"
+    assert stored_metadata["class_id"] == "class_1"
+    assert stored_metadata["timestamp"] == "2024-01-01"
+
+
+def test_store_embedding_all_none_metadata(mock_openai_client, mock_chromadb):
+    """Test storing with metadata where all optional fields are None."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+    embedding = [0.1] * 1536
+
+    # Only required fields, all optional fields are None
+    metadata = {
+        "chunk_id": "chunk_2",
+        "class_id": "class_1",
+        "exam_source": None,
+        "exam_type": None,
+    }
+
+    chunk_id = service.store_embedding("test text", embedding, metadata)
+
+    assert chunk_id == "chunk_2"
+    mock_collection.add.assert_called_once()
+
+    # Verify cleaned metadata only contains non-None values
+    call_args = mock_collection.add.call_args
+    stored_metadata = call_args.kwargs["metadatas"][0]
+
+    assert "exam_source" not in stored_metadata
+    assert "exam_type" not in stored_metadata
+    assert stored_metadata["chunk_id"] == "chunk_2"
+    assert stored_metadata["class_id"] == "class_1"
+
+
+def test_batch_store_filters_none_values(mock_openai_client, mock_chromadb):
+    """Test that None values in batch metadata are filtered out."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+
+    texts = ["text 1", "text 2"]
+    metadata_list = [
+        {
+            "chunk_id": "chunk_1",
+            "class_id": "class_1",
+            "exam_source": None,  # None value
+            "exam_type": "midterm",
+        },
+        {
+            "chunk_id": "chunk_2",
+            "class_id": "class_1",
+            "exam_source": "test_source",
+            "exam_type": None,  # None value
+        },
+    ]
+
+    chunk_ids = service.batch_store(texts, metadata_list)
+
+    assert len(chunk_ids) == 2
+    assert chunk_ids == ["chunk_1", "chunk_2"]
+    mock_collection.add.assert_called_once()
+
+    # Verify that None values were filtered out from all metadata
+    call_args = mock_collection.add.call_args
+    stored_metadata_list = call_args.kwargs["metadatas"]
+
+    # First metadata: exam_source should be filtered out
+    assert "exam_source" not in stored_metadata_list[0]
+    assert stored_metadata_list[0]["exam_type"] == "midterm"
+    assert stored_metadata_list[0]["chunk_id"] == "chunk_1"
+
+    # Second metadata: exam_type should be filtered out
+    assert "exam_type" not in stored_metadata_list[1]
+    assert stored_metadata_list[1]["exam_source"] == "test_source"
+    assert stored_metadata_list[1]["chunk_id"] == "chunk_2"

@@ -12,11 +12,18 @@ from app.main import app
 @pytest.fixture
 def db_session():
     """Create a test database session."""
+    # Clean up before creating
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        # Clean up any existing data
+        db.query(Question).delete()
+        db.query(Class).delete()
+        db.commit()
         yield db
     finally:
+        db.rollback()
         db.close()
         Base.metadata.drop_all(bind=engine)
 

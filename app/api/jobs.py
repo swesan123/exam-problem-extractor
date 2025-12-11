@@ -99,8 +99,12 @@ async def list_class_jobs(
                     "total_files": job.total_files,
                     "processed_files": job.processed_files,
                     "failed_files": job.failed_files,
-                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    "created_at": (
+                        job.created_at.isoformat() if job.created_at else None
+                    ),
+                    "completed_at": (
+                        job.completed_at.isoformat() if job.completed_at else None
+                    ),
                 }
                 for job in jobs
             ],
@@ -112,4 +116,3 @@ async def list_class_jobs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list jobs: {str(e)}",
         ) from e
-
