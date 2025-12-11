@@ -1,9 +1,11 @@
 """Service for class management operations."""
-import uuid
+
 import logging
+import uuid
 from typing import Optional
-from sqlalchemy.orm import Session
+
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.db.models import Class, Question
 from app.models.class_models import ClassCreate, ClassUpdate
@@ -106,7 +108,9 @@ class ClassService:
 
         # Check name conflict if name is being updated
         if class_data.name and class_data.name != class_obj.name:
-            existing = self.db.query(Class).filter(Class.name == class_data.name).first()
+            existing = (
+                self.db.query(Class).filter(Class.name == class_data.name).first()
+            )
             if existing:
                 raise ValueError(f"Class with name '{class_data.name}' already exists")
 
@@ -158,9 +162,11 @@ class ClassService:
         if not class_obj:
             return None
 
-        question_count = self.db.query(func.count(Question.id)).filter(
-            Question.class_id == class_id
-        ).scalar()
+        question_count = (
+            self.db.query(func.count(Question.id))
+            .filter(Question.class_id == class_id)
+            .scalar()
+        )
 
         return {
             "id": class_obj.id,
@@ -171,4 +177,3 @@ class ClassService:
             "created_at": class_obj.created_at,
             "updated_at": class_obj.updated_at,
         }
-

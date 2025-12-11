@@ -1,4 +1,5 @@
 """Embedding service for generating and storing text embeddings."""
+
 from typing import Dict, List, Optional
 
 import chromadb
@@ -67,9 +68,7 @@ class EmbeddingService:
         except Exception as e:
             raise Exception(f"Failed to generate embedding: {str(e)}") from e
 
-    def store_embedding(
-        self, text: str, embedding: List[float], metadata: Dict
-    ) -> str:
+    def store_embedding(self, text: str, embedding: List[float], metadata: Dict) -> str:
         """
         Store embedding in vector database.
 
@@ -81,7 +80,9 @@ class EmbeddingService:
         Returns:
             Embedding ID (chunk_id from metadata)
         """
-        chunk_id = metadata.get("chunk_id", f"chunk_{len(self.collection.get()['ids'])}")
+        chunk_id = metadata.get(
+            "chunk_id", f"chunk_{len(self.collection.get()['ids'])}"
+        )
 
         # Store in ChromaDB
         self.collection.add(
@@ -93,9 +94,7 @@ class EmbeddingService:
 
         return chunk_id
 
-    def batch_store(
-        self, texts: List[str], metadata_list: List[Dict]
-    ) -> List[str]:
+    def batch_store(self, texts: List[str], metadata_list: List[Dict]) -> List[str]:
         """
         Store multiple embeddings efficiently.
 
@@ -164,4 +163,3 @@ class EmbeddingService:
                 metadata_list.append(chunk_metadata)
 
             return self.batch_store(chunks, metadata_list)
-

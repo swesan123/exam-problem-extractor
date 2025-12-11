@@ -1,6 +1,8 @@
 """Unit tests for utility functions."""
-import pytest
+
 from pathlib import Path
+
+import pytest
 
 from app.utils import chunking, file_utils, text_cleaning
 
@@ -40,4 +42,3 @@ def test_smart_chunk():
     text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
     chunks = chunking.smart_chunk(text, max_size=50)
     assert len(chunks) >= 1
-

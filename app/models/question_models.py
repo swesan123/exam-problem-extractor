@@ -1,4 +1,5 @@
 """Pydantic models for question management API."""
+
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -14,7 +15,9 @@ class QuestionCreate(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(
         default_factory=dict, description="Additional metadata"
     )
-    source_image: Optional[str] = Field(None, description="Path to source image if available")
+    source_image: Optional[str] = Field(
+        None, description="Path to source image if available"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -31,7 +34,9 @@ class QuestionCreate(BaseModel):
 class QuestionUpdate(BaseModel):
     """Model for updating an existing question."""
 
-    question_text: Optional[str] = Field(None, min_length=1, description="The question text")
+    question_text: Optional[str] = Field(
+        None, min_length=1, description="The question text"
+    )
     solution: Optional[str] = Field(None, description="Solution to the question")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
@@ -70,7 +75,7 @@ class QuestionResponse(BaseModel):
                 "created_at": "2025-12-10T12:00:00Z",
                 "updated_at": "2025-12-10T12:00:00Z",
             }
-        }
+        },
     }
 
 

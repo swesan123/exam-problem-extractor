@@ -1,4 +1,5 @@
 """Pydantic models for class management endpoints."""
+
 from datetime import datetime
 from typing import Optional
 
@@ -9,15 +10,21 @@ class ClassCreate(BaseModel):
     """Request model for creating a class."""
 
     name: str = Field(..., min_length=1, max_length=200, description="Class name")
-    description: Optional[str] = Field(None, max_length=1000, description="Class description")
+    description: Optional[str] = Field(
+        None, max_length=1000, description="Class description"
+    )
     subject: Optional[str] = Field(None, max_length=100, description="Subject area")
 
 
 class ClassUpdate(BaseModel):
     """Request model for updating a class."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=200, description="Class name")
-    description: Optional[str] = Field(None, max_length=1000, description="Class description")
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=200, description="Class name"
+    )
+    description: Optional[str] = Field(
+        None, max_length=1000, description="Class description"
+    )
     subject: Optional[str] = Field(None, max_length=100, description="Subject area")
 
 
@@ -41,4 +48,3 @@ class ClassListResponse(BaseModel):
 
     classes: list[ClassResponse] = Field(..., description="List of classes")
     total: int = Field(..., description="Total number of classes")
-

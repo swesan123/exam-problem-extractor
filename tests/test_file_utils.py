@@ -1,4 +1,5 @@
 """Unit tests for file utility functions."""
+
 import io
 import tempfile
 from pathlib import Path
@@ -250,4 +251,3 @@ startxref
             finally:
                 if temp_pdf_path.exists():
                     file_utils.cleanup_temp_file(temp_pdf_path)
-

@@ -1,4 +1,5 @@
 """Service for exporting questions to various file formats."""
+
 import json
 import logging
 from enum import Enum
@@ -120,7 +121,9 @@ class ExportService:
             story.append(Spacer(1, 6))
 
             # Question text
-            q_text = Paragraph(question.question_text.replace("\n", "<br/>"), styles["Normal"])
+            q_text = Paragraph(
+                question.question_text.replace("\n", "<br/>"), styles["Normal"]
+            )
             story.append(q_text)
             story.append(Spacer(1, 12))
 
@@ -129,7 +132,9 @@ class ExportService:
                 sol_title = Paragraph("Solution:", styles["Heading3"])
                 story.append(sol_title)
                 story.append(Spacer(1, 6))
-                sol_text = Paragraph(question.solution.replace("\n", "<br/>"), styles["Normal"])
+                sol_text = Paragraph(
+                    question.solution.replace("\n", "<br/>"), styles["Normal"]
+                )
                 story.append(sol_text)
                 story.append(Spacer(1, 12))
 
@@ -201,7 +206,10 @@ class ExportService:
             return buffer.read(), "application/pdf", "pdf"
         elif format == ExportFormat.DOCX:
             buffer = self.export_to_docx(questions, include_solutions)
-            return buffer.read(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"
+            return (
+                buffer.read(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "docx",
+            )
         else:
             raise ValueError(f"Unsupported export format: {format}")
-

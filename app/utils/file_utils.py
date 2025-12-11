@@ -1,10 +1,9 @@
 """File handling utilities."""
+
 import tempfile
 from pathlib import Path
-from typing import Optional
 
-from fastapi import UploadFile, HTTPException, status
-
+from fastapi import HTTPException, UploadFile, status
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
 MAX_FILE_SIZE_MB = 10
@@ -104,4 +103,3 @@ def get_file_size_mb(path: Path) -> float:
         return 0.0
     size_bytes = path.stat().st_size
     return size_bytes / (1024 * 1024)
-

@@ -1,4 +1,5 @@
 """Integration tests for OCR route with PDF support."""
+
 import io
 
 import pytest
@@ -147,4 +148,3 @@ startxref
             data = response.json()
             assert "text" in data
             assert data["text"] == "Extracted text"
-

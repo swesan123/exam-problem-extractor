@@ -1,12 +1,13 @@
 """Service for managing questions."""
+
 import logging
 import uuid
 from typing import Optional
 
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from app.db.models import Question, Class
+from app.db.models import Class, Question
 from app.models.question_models import QuestionCreate, QuestionUpdate
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,9 @@ class QuestionService:
             ValueError: If class does not exist
         """
         # Validate class exists
-        class_obj = self.db.query(Class).filter(Class.id == question_data.class_id).first()
+        class_obj = (
+            self.db.query(Class).filter(Class.id == question_data.class_id).first()
+        )
         if not class_obj:
             raise ValueError(f"Class with ID '{question_data.class_id}' not found")
 
@@ -56,7 +59,9 @@ class QuestionService:
         self.db.commit()
         self.db.refresh(question)
 
-        logger.info(f"Created question {question.id} for class {question_data.class_id}")
+        logger.info(
+            f"Created question {question.id} for class {question_data.class_id}"
+        )
         return question
 
     def get_question(self, question_id: str) -> Optional[Question]:
@@ -71,7 +76,9 @@ class QuestionService:
         """
         return self.db.query(Question).filter(Question.id == question_id).first()
 
-    def update_question(self, question_id: str, question_data: QuestionUpdate) -> Optional[Question]:
+    def update_question(
+        self, question_id: str, question_data: QuestionUpdate
+    ) -> Optional[Question]:
         """
         Update a question.
 

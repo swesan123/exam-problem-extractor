@@ -1,4 +1,5 @@
 """Pydantic models for embedding endpoint."""
+
 from datetime import datetime
 from typing import Optional
 
@@ -51,9 +52,13 @@ class EmbeddingRequest(BaseModel):
 class EmbeddingResponse(BaseModel):
     """Response model for embedding endpoint."""
 
-    embedding_id: str = Field(..., description="Unique identifier for the stored embedding")
+    embedding_id: str = Field(
+        ..., description="Unique identifier for the stored embedding"
+    )
     status: str = Field(..., description="Status of the embedding operation")
-    vector_dimension: int = Field(..., ge=1, description="Dimension of the embedding vector")
+    vector_dimension: int = Field(
+        ..., ge=1, description="Dimension of the embedding vector"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -64,4 +69,3 @@ class EmbeddingResponse(BaseModel):
             }
         }
     }
-

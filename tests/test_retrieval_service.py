@@ -1,6 +1,8 @@
 """Unit tests for retrieval service."""
-import pytest
+
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
@@ -36,4 +38,3 @@ def test_retrieve_empty_query(mock_embedding_service):
     service = RetrievalService(mock_embedding_service)
     with pytest.raises(ValueError):
         service.retrieve("", top_k=5)
-

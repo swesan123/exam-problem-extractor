@@ -1,4 +1,5 @@
 """FastAPI middleware for request tracking and logging."""
+
 import time
 import uuid
 from typing import Callable
@@ -28,4 +29,3 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         response.headers["X-Process-Time"] = str(process_time)
 
         return response
-

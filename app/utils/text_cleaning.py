@@ -1,4 +1,5 @@
 """Text cleaning utilities for OCR output."""
+
 import re
 from typing import List
 
@@ -46,7 +47,9 @@ def remove_artifacts(text: str) -> str:
 
     # Remove stray characters that are likely OCR errors
     # Keep common mathematical and special characters
-    text = re.sub(r"[^\w\s\.\,\;\:\!\?\-\+\=\*\/\(\)\[\]\{\}\<\>\^\$\%\#\@\&\|\\\n\t]", "", text)
+    text = re.sub(
+        r"[^\w\s\.\,\;\:\!\?\-\+\=\*\/\(\)\[\]\{\}\<\>\^\$\%\#\@\&\|\\\n\t]", "", text
+    )
 
     return text
 
@@ -108,4 +111,3 @@ def extract_math_expressions(text: str) -> List[str]:
         expressions.extend(matches)
 
     return list(set(expressions))  # Remove duplicates
-

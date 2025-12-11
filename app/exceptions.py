@@ -1,4 +1,5 @@
 """Custom exception classes."""
+
 from typing import Any, Dict, Optional
 
 
@@ -46,4 +47,3 @@ class ValidationException(ExamProblemExtractorException):
     """Exception raised during input validation."""
 
     pass
-

@@ -1,7 +1,9 @@
 """Tests for export service."""
+
 import json
-import pytest
 from io import BytesIO
+
+import pytest
 
 from app.db.models import Question
 from app.services.export_service import ExportFormat, ExportService
@@ -11,7 +13,7 @@ from app.services.export_service import ExportFormat, ExportService
 def sample_questions():
     """Create sample questions for testing."""
     from datetime import datetime
-    
+
     questions = [
         Question(
             id="q1",
@@ -42,7 +44,7 @@ def export_service():
 def test_export_to_txt(export_service, sample_questions):
     """Test TXT export."""
     result = export_service.export_to_txt(sample_questions, include_solutions=False)
-    
+
     assert "EXAM QUESTIONS" in result
     assert "Question 1" in result
     assert "What is 2 + 2?" in result
@@ -54,7 +56,7 @@ def test_export_to_txt(export_service, sample_questions):
 def test_export_to_txt_with_solutions(export_service, sample_questions):
     """Test TXT export with solutions."""
     result = export_service.export_to_txt(sample_questions, include_solutions=True)
-    
+
     assert "EXAM QUESTIONS" in result
     assert "Question 1" in result
     assert "What is 2 + 2?" in result
@@ -67,7 +69,7 @@ def test_export_to_json(export_service, sample_questions):
     """Test JSON export."""
     result = export_service.export_to_json(sample_questions, include_solutions=False)
     data = json.loads(result)
-    
+
     assert "questions" in data
     assert "total" in data
     assert data["total"] == 2
@@ -80,7 +82,7 @@ def test_export_to_json_with_solutions(export_service, sample_questions):
     """Test JSON export with solutions."""
     result = export_service.export_to_json(sample_questions, include_solutions=True)
     data = json.loads(result)
-    
+
     assert data["questions"][0]["solution"] == "4"
     assert data["questions"][1]["solution"] == "Paris"
 
@@ -88,7 +90,7 @@ def test_export_to_json_with_solutions(export_service, sample_questions):
 def test_export_to_pdf(export_service, sample_questions):
     """Test PDF export."""
     buffer = export_service.export_to_pdf(sample_questions, include_solutions=False)
-    
+
     assert isinstance(buffer, BytesIO)
     assert buffer.tell() == 0  # Should be at start
     content = buffer.read()
@@ -99,7 +101,7 @@ def test_export_to_pdf(export_service, sample_questions):
 def test_export_to_docx(export_service, sample_questions):
     """Test DOCX export."""
     buffer = export_service.export_to_docx(sample_questions, include_solutions=False)
-    
+
     assert isinstance(buffer, BytesIO)
     assert buffer.tell() == 0  # Should be at start
     content = buffer.read()
@@ -113,7 +115,7 @@ def test_export_questions_txt(export_service, sample_questions):
     content, content_type, file_ext = export_service.export_questions(
         sample_questions, ExportFormat.TXT, include_solutions=False
     )
-    
+
     assert isinstance(content, bytes)
     assert content_type == "text/plain"
     assert file_ext == "txt"
@@ -125,7 +127,7 @@ def test_export_questions_json(export_service, sample_questions):
     content, content_type, file_ext = export_service.export_questions(
         sample_questions, ExportFormat.JSON, include_solutions=False
     )
-    
+
     assert isinstance(content, bytes)
     assert content_type == "application/json"
     assert file_ext == "json"
@@ -138,7 +140,7 @@ def test_export_questions_pdf(export_service, sample_questions):
     content, content_type, file_ext = export_service.export_questions(
         sample_questions, ExportFormat.PDF, include_solutions=False
     )
-    
+
     assert isinstance(content, bytes)
     assert content_type == "application/pdf"
     assert file_ext == "pdf"
@@ -150,7 +152,7 @@ def test_export_questions_docx(export_service, sample_questions):
     content, content_type, file_ext = export_service.export_questions(
         sample_questions, ExportFormat.DOCX, include_solutions=False
     )
-    
+
     assert isinstance(content, bytes)
     assert "wordprocessingml" in content_type
     assert file_ext == "docx"
@@ -170,4 +172,3 @@ def test_export_empty_questions(export_service):
     result = export_service.export_to_txt([], include_solutions=False)
     assert "EXAM QUESTIONS" in result
     assert "Question" not in result
-

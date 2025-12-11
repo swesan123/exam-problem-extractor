@@ -1,4 +1,5 @@
 """Retrieval route endpoint."""
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.retrieval_models import RetrieveRequest, RetrieveResponse
@@ -46,4 +47,3 @@ async def retrieve_similar(request: RetrieveRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Retrieval failed: {str(e)}",
         ) from e
-

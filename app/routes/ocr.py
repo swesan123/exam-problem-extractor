@@ -1,4 +1,5 @@
 """OCR route endpoint."""
+
 import time
 from pathlib import Path
 
@@ -6,7 +7,8 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.models.ocr_models import OCRResponse
 from app.services.ocr_service import OCRService
-from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_image_file
+from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
+                                  validate_image_file)
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
@@ -55,4 +57,3 @@ async def extract_text(file: UploadFile = File(...)):
         # Clean up temporary file
         if temp_path:
             cleanup_temp_file(temp_path)
-

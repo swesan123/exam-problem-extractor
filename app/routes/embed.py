@@ -1,4 +1,5 @@
 """Embedding route endpoint."""
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.models.embedding_models import EmbeddingRequest, EmbeddingResponse
@@ -46,4 +47,3 @@ async def create_embedding(request: EmbeddingRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Embedding generation or storage failed: {str(e)}",
         ) from e
-

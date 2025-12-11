@@ -1,4 +1,5 @@
 """Pydantic models for OCR endpoint."""
+
 from typing import Optional
 
 from fastapi import UploadFile
@@ -21,5 +22,12 @@ class OCRResponse(BaseModel):
         description="Processing time in milliseconds",
     )
 
-    model_config = {"json_schema_extra": {"example": {"text": "Sample extracted text", "confidence": 0.95, "processing_time_ms": 1234}}}
-
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "text": "Sample extracted text",
+                "confidence": 0.95,
+                "processing_time_ms": 1234,
+            }
+        }
+    }
