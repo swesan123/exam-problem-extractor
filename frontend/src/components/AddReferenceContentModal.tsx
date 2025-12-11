@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { embedService } from '../services/embedService'
-import { ocrService } from '../services/ocrService'
-import { EmbeddingRequest } from '../types/embedding'
+import { jobService } from '../services/jobService'
 
 interface FileWithStatus {
   file: File
@@ -195,49 +193,24 @@ const AddReferenceContentModal = ({
     setError(null)
     setSuccess(null)
 
-    const successful: string[] = []
-    const failed: string[] = []
-
     try {
-      for (let i = 0; i < files.length; i++) {
-        const fileWithStatus = files[i]
+      const fileList = files.map((f) => f.file)
+      const response = await jobService.uploadReferenceContent(
+        classId,
+        fileList,
+        examSource || undefined,
+        examType || undefined
+      )
 
-        if (fileWithStatus.status === 'success') {
-          if (fileWithStatus.extractedText) {
-            try {
-              await embedText(fileWithStatus.extractedText, fileWithStatus.file.name)
-              successful.push(fileWithStatus.file.name)
-            } catch (err) {
-              failed.push(fileWithStatus.file.name)
-            }
-          }
-        } else if (fileWithStatus.status !== 'error') {
-          try {
-            const extractedText = await processFile(fileWithStatus, i)
-            await embedText(extractedText, fileWithStatus.file.name)
-            successful.push(fileWithStatus.file.name)
-          } catch (err) {
-            failed.push(fileWithStatus.file.name)
-          }
-        } else {
-          failed.push(fileWithStatus.file.name)
-        }
-      }
-
-      if (successful.length > 0) {
-        setSuccess(`Successfully processed ${successful.length} file(s)`)
-        setTimeout(() => {
-          onSuccess()
-          onClose()
-        }, 1500)
-      }
-
-      if (failed.length > 0) {
-        setError(`Failed to process ${failed.length} file(s): ${failed.join(', ')}`)
-      }
+      setSuccess('Upload started! Processing in background...')
+      
+      // Close modal immediately after job is created
+      setTimeout(() => {
+        onSuccess()
+        onClose()
+      }, 1000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process files')
-    } finally {
+      setError(err instanceof Error ? err.message : 'Failed to upload files')
       setProcessing(false)
     }
   }

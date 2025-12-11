@@ -22,8 +22,9 @@ class TestErrorMessageSanitization:
         """Test that OCR errors don't expose API keys in error messages."""
         # Set environment to production to enable error sanitization
         import app.config
+
         monkeypatch.setattr(app.config.settings, "environment", "production")
-        
+
         # Mock OCR service to raise an error that might contain API key
         mocker.patch(
             "app.services.ocr_service.OCRService.extract_with_confidence",
@@ -46,7 +47,9 @@ class TestErrorMessageSanitization:
         # Mock to raise an internal error
         mocker.patch(
             "app.services.generation_service.GenerationService.generate_with_metadata",
-            side_effect=Exception("Internal database connection failed: password=secret123"),
+            side_effect=Exception(
+                "Internal database connection failed: password=secret123"
+            ),
         )
 
         response = client.post(
@@ -77,7 +80,9 @@ class TestFileUploadSecurity:
     def test_mime_type_validation_not_bypassable(self, client):
         """Test that MIME type validation cannot be bypassed by filename."""
         # Try to upload executable with image extension
-        files = {"file": ("malicious.exe.png", b"executable", "application/x-executable")}
+        files = {
+            "file": ("malicious.exe.png", b"executable", "application/x-executable")
+        }
 
         response = client.post("/ocr", files=files)
         assert response.status_code == 400
@@ -187,7 +192,9 @@ class TestRateLimiting:
             assert 200 in responses
         finally:
             # Restore original setting
-            monkeypatch.setattr(app.config.settings, "rate_limit_per_minute", original_limit)
+            monkeypatch.setattr(
+                app.config.settings, "rate_limit_per_minute", original_limit
+            )
 
 
 class TestCORSConfiguration:
@@ -201,7 +208,10 @@ class TestCORSConfiguration:
         )
         assert response.status_code == 200
         # CORS headers should be present
-        assert "access-control-allow-origin" in response.headers or "Access-Control-Allow-Origin" in response.headers
+        assert (
+            "access-control-allow-origin" in response.headers
+            or "Access-Control-Allow-Origin" in response.headers
+        )
 
     def test_cors_credentials_allowed(self, client):
         """Test that credentials are allowed in CORS."""
@@ -235,7 +245,7 @@ class TestErrorHandling:
         assert "error" in error_data or "detail" in error_data
         # Should not expose full stack trace
         assert "Traceback" not in str(error_data)
-        assert "File \"" not in str(error_data)
+        assert 'File "' not in str(error_data)
 
     def test_validation_error_format(self, client):
         """Test that validation errors are properly formatted."""
@@ -280,6 +290,7 @@ class TestTemporaryFileCleanup:
 
         # Check that temp files were cleaned up (may take a moment)
         import time
+
         time.sleep(0.1)
         for temp_file in created_files:
             # Files should be cleaned up
@@ -307,12 +318,15 @@ class TestPDFSecurity:
         # Should handle error gracefully
         assert response.status_code in [400, 500]
         # Should not crash the server
-        assert response.status_code != 500 or "memory" not in response.json().get("detail", "").lower()
+        assert (
+            response.status_code != 500
+            or "memory" not in response.json().get("detail", "").lower()
+        )
 
     def test_pdf_with_many_pages_handled(self, client, mocker):
         """Test that PDFs with many pages are handled."""
         from pathlib import Path
-        
+
         # Mock to return many pages
         many_image_paths = [Path(f"/tmp/page_{i}.png") for i in range(100)]
         mocker.patch(
@@ -362,8 +376,9 @@ class TestAPIKeySecurity:
         # Set environment to production to enable error sanitization
         # Patch the settings object at the module level
         import app.config
+
         monkeypatch.setattr(app.config.settings, "environment", "production")
-        
+
         # Mock to raise an error that might include API key
         mocker.patch(
             "app.services.ocr_service.OCRService.extract_with_confidence",
@@ -379,4 +394,3 @@ class TestAPIKeySecurity:
         assert "1234567890" not in error_detail
         # Should contain sanitized version (sk-***) instead
         assert "sk-***" in error_detail or "sk-" not in error_detail
-

@@ -57,6 +57,7 @@ async def create_embedding(request: Request, embedding_request: EmbeddingRequest
         # Sanitize the full error message, not just the exception
         full_error_msg = f"Embedding generation or storage failed: {str(e)}"
         from app.utils.error_utils import sanitize_error_message
+
         safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -12,11 +12,16 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api import classes, questions, reference_content
+from app.api import classes, jobs, questions, reference_content
 from app.config import settings
-from app.exceptions import (EmbeddingException, ExamProblemExtractorException,
-                            GenerationException, OCRException,
-                            RetrievalException, ValidationException)
+from app.exceptions import (
+    EmbeddingException,
+    ExamProblemExtractorException,
+    GenerationException,
+    OCRException,
+    RetrievalException,
+    ValidationException,
+)
 from app.middleware import RequestIDMiddleware
 from app.routes import embed, generate, ocr, retrieve
 
@@ -49,8 +54,9 @@ async def lifespan(app: FastAPI):
 
     # Initialize database
     try:
-        from app.db.database import init_db
+        from app.db.database import init_db, _db_path
 
+        logger.info(f"Database path: {_db_path}")
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
@@ -74,9 +80,7 @@ app = FastAPI(
 
 # Configure CORS
 cors_origins = [
-    origin.strip()
-    for origin in settings.cors_origins.split(",")
-    if origin.strip()
+    origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()
 ]
 # In development, allow localhost origins if not specified
 if not cors_origins and settings.log_level.upper() == "DEBUG":
@@ -187,6 +191,7 @@ app.include_router(generate.router)
 app.include_router(classes.router)
 app.include_router(questions.router)
 app.include_router(reference_content.router)
+app.include_router(jobs.router)
 
 # Apply rate limiting to route endpoints
 # Get rate limit string based on settings

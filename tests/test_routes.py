@@ -202,7 +202,7 @@ def test_retrieve_endpoint_validation(client: TestClient):
 
 
 def test_generate_endpoint_with_class_id(
-    client: TestClient, sample_class: Class, mocker
+    client: TestClient, sample_class: Class, db_session: Session, mocker
 ):
     """Test generate endpoint with class_id saves question to class."""
     # Mock service instantiation to avoid ChromaDB conflicts
@@ -243,19 +243,15 @@ def test_generate_endpoint_with_class_id(
     assert data["question_id"] is not None
     assert data["class_id"] == sample_class.id
 
-    # Verify question was saved to database
-    from app.db.database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        saved_question = (
-            db.query(Question).filter(Question.id == data["question_id"]).first()
-        )
-        assert saved_question is not None
-        assert saved_question.class_id == sample_class.id
-        assert saved_question.question_text == "Generated question text"
-    finally:
-        db.close()
+    # Verify question was saved to database using the same session as the endpoint
+    # The endpoint uses db_session via dependency override, so we use the same session
+    db_session.expire_all()  # Refresh to see committed changes
+    saved_question = (
+        db_session.query(Question).filter(Question.id == data["question_id"]).first()
+    )
+    assert saved_question is not None, f"Question {data['question_id']} should be saved"
+    assert saved_question.class_id == sample_class.id
+    assert saved_question.question_text == "Generated question text"
 
 
 def test_generate_endpoint_without_class_id(client: TestClient, mocker):

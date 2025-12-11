@@ -25,7 +25,10 @@ class TestCORS:
             },
         )
         assert response.status_code in [200, 204]
-        assert "access-control-allow-origin" in response.headers or "Access-Control-Allow-Origin" in response.headers
+        assert (
+            "access-control-allow-origin" in response.headers
+            or "Access-Control-Allow-Origin" in response.headers
+        )
 
     def test_cors_allows_configured_origin(self, client):
         """Test that configured origins are allowed."""
@@ -73,7 +76,9 @@ class TestRateLimiting:
             assert response.status_code in [200, 400, 422, 500]
 
         # Restore original setting
-        monkeypatch.setattr(app.config.settings, "rate_limit_per_minute", original_rate_limit)
+        monkeypatch.setattr(
+            app.config.settings, "rate_limit_per_minute", original_rate_limit
+        )
 
     def test_rate_limit_disabled_when_setting_off(self, client, monkeypatch):
         """Test that rate limiting can be disabled."""
@@ -96,7 +101,7 @@ class TestRateLimiting:
 
         # Check that limiter is attached to app
         assert hasattr(app.state, "limiter")
-        
+
         # Check that endpoints exist and can be called
         assert callable(ocr.extract_text)
         assert callable(generate.generate_question)
@@ -118,4 +123,3 @@ class TestSecurityHeaders:
         response = client.get("/health")
         assert response.status_code == 200
         assert "X-Process-Time" in response.headers
-

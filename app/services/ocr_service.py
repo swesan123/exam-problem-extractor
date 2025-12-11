@@ -1,6 +1,7 @@
 """OCR service for extracting text from images using OpenAI Vision API."""
 
 import base64
+import imghdr
 import time
 from pathlib import Path
 from typing import Optional, Tuple
@@ -40,6 +41,46 @@ class OCRService:
         text, _ = self.extract_with_confidence(image_path)
         return text
 
+    def _detect_image_mime_type(self, image_path: Path) -> str:
+        """
+        Detect the MIME type of an image file.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            MIME type string (e.g., 'image/png', 'image/jpeg')
+        """
+        # Try to detect from file extension first
+        suffix = image_path.suffix.lower()
+        extension_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+
+        if suffix in extension_map:
+            return extension_map[suffix]
+
+        # Fallback: try to detect from file content
+        try:
+            image_type = imghdr.what(str(image_path))
+            if image_type:
+                type_map = {
+                    "png": "image/png",
+                    "jpeg": "image/jpeg",
+                    "gif": "image/gif",
+                    "webp": "image/webp",
+                }
+                return type_map.get(image_type, "image/jpeg")
+        except Exception:
+            pass
+
+        # Default to JPEG if detection fails
+        return "image/jpeg"
+
     def extract_with_confidence(
         self, image_path: Path, max_retries: int = 3
     ) -> Tuple[str, Optional[float]]:
@@ -59,11 +100,12 @@ class OCRService:
         if not image_path.exists():
             raise FileNotFoundError(f"Image file not found: {image_path}")
 
-        start_time = time.time()
-
         # Read and encode image
         image_data = image_path.read_bytes()
         base64_image = base64.b64encode(image_data).decode("utf-8")
+
+        # Detect the correct MIME type for the image
+        mime_type = self._detect_image_mime_type(image_path)
 
         # Prepare API request
         messages = [
@@ -77,7 +119,7 @@ class OCRService:
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
+                            "url": f"data:{mime_type};base64,{base64_image}",
                         },
                     },
                 ],
@@ -99,9 +141,6 @@ class OCRService:
 
                 # Clean the extracted text
                 cleaned_text = clean_ocr_text(extracted_text)
-
-                # Calculate processing time
-                processing_time = (time.time() - start_time) * 1000
 
                 # Note: OpenAI Vision API doesn't provide confidence scores
                 # Return None for confidence

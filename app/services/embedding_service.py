@@ -84,12 +84,15 @@ class EmbeddingService:
             "chunk_id", f"chunk_{len(self.collection.get()['ids'])}"
         )
 
+        # Filter out None values from metadata - ChromaDB doesn't accept None
+        cleaned_metadata = {k: v for k, v in metadata.items() if v is not None}
+
         # Store in ChromaDB
         self.collection.add(
             ids=[chunk_id],
             embeddings=[embedding],
             documents=[text],
-            metadatas=[metadata],
+            metadatas=[cleaned_metadata],
         )
 
         return chunk_id
@@ -123,12 +126,17 @@ class EmbeddingService:
             meta.get("chunk_id", f"chunk_{i}") for i, meta in enumerate(metadata_list)
         ]
 
+        # Filter out None values from metadata - ChromaDB doesn't accept None
+        cleaned_metadata_list = [
+            {k: v for k, v in meta.items() if v is not None} for meta in metadata_list
+        ]
+
         # Store in ChromaDB
         self.collection.add(
             ids=chunk_ids,
             embeddings=embeddings,
             documents=texts,
-            metadatas=metadata_list,
+            metadatas=cleaned_metadata_list,
         )
 
         return chunk_ids

@@ -16,6 +16,12 @@ class EmbeddingMetadata(BaseModel):
         None,
         description="Timestamp when the content was created",
     )
+    class_id: Optional[str] = Field(
+        None, description="Class ID this reference content belongs to"
+    )
+    exam_type: Optional[str] = Field(
+        None, description="Type of exam (e.g., midterm, final, practice)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -24,6 +30,8 @@ class EmbeddingMetadata(BaseModel):
                 "page": 1,
                 "chunk_id": "chunk_001",
                 "timestamp": "2023-01-01T00:00:00Z",
+                "class_id": "class_abc123",
+                "exam_type": "midterm",
             }
         }
     }

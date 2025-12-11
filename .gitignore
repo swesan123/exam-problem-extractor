@@ -43,8 +43,13 @@ ENV/
 
 # Vector Store
 vector_store/
-*.db
 *.index
+
+# Database (keep data directory structure but ignore DB files)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 
 # Logs
 *.log

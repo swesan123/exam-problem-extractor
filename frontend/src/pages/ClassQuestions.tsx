@@ -178,9 +178,9 @@ const ClassQuestions = () => {
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-900">Question</h3>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-500">
-                    {new Date(question.created_at).toLocaleDateString()}
-                  </span>
+                <span className="text-xs text-gray-500">
+                  {new Date(question.created_at).toLocaleDateString()}
+                </span>
                   <div className="flex items-center space-x-1">
                     <select
                       onChange={(e) => handleDownload(question.id, e.target.value as 'txt' | 'pdf' | 'docx' | 'json')}
