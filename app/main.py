@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -7,19 +8,17 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
+from app.api import classes, questions
 from app.config import settings
-from app.exceptions import (
-    EmbeddingException,
-    ExamProblemExtractorException,
-    GenerationException,
-    OCRException,
-    RetrievalException,
-    ValidationException,
-)
+from app.exceptions import (EmbeddingException, ExamProblemExtractorException,
+                            GenerationException, OCRException,
+                            RetrievalException, ValidationException)
 from app.middleware import RequestIDMiddleware
 from app.routes import embed, generate, ocr, retrieve
-from app.api import classes, questions
 
 # Configure logging
 logging.basicConfig(
@@ -38,7 +37,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Exam Problem Extractor API...")
     logger.info(f"Environment: {settings.log_level}")
     logger.info(f"Vector DB: {settings.vector_db_type} at {settings.vector_db_path}")
-    
+
     # Validate required environment variables
     try:
         if not settings.openai_api_key:
@@ -47,16 +46,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Environment variable validation failed: {e}")
         raise
-    
+
     # Initialize database
     try:
         from app.db.database import init_db
+
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
         raise
-    
+
     yield
     # Shutdown
     logger.info("Shutting down Exam Problem Extractor API...")
@@ -73,21 +73,37 @@ app = FastAPI(
 )
 
 # Configure CORS
+cors_origins = [
+    origin.strip()
+    for origin in settings.cors_origins.split(",")
+    if origin.strip()
+]
+# In development, allow localhost origins if not specified
+if not cors_origins and settings.log_level.upper() == "DEBUG":
+    cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=cors_origins if cors_origins else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # Add request ID middleware
 app.add_middleware(RequestIDMiddleware)
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Exception handlers
 @app.exception_handler(ExamProblemExtractorException)
-async def custom_exception_handler(request: Request, exc: ExamProblemExtractorException):
+async def custom_exception_handler(
+    request: Request, exc: ExamProblemExtractorException
+):
     """Handle custom application exceptions."""
     request_id = getattr(request.state, "request_id", "unknown")
     logger.error(
@@ -99,7 +115,9 @@ async def custom_exception_handler(request: Request, exc: ExamProblemExtractorEx
     # Determine status code based on exception type
     if isinstance(exc, ValidationException):
         status_code = status.HTTP_400_BAD_REQUEST
-    elif isinstance(exc, (OCRException, EmbeddingException, RetrievalException, GenerationException)):
+    elif isinstance(
+        exc, (OCRException, EmbeddingException, RetrievalException, GenerationException)
+    ):
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -160,6 +178,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         },
     )
 
+
 # Include routers
 app.include_router(ocr.router)
 app.include_router(embed.router)
@@ -167,6 +186,19 @@ app.include_router(retrieve.router)
 app.include_router(generate.router)
 app.include_router(classes.router)
 app.include_router(questions.router)
+
+# Apply rate limiting to route endpoints
+# Get rate limit string based on settings
+if settings.rate_limit_enabled:
+    rate_limit_str = f"{settings.rate_limit_per_minute}/minute"
+else:
+    rate_limit_str = "1000/minute"
+
+# Apply rate limit decorators to endpoints
+ocr.extract_text = limiter.limit(rate_limit_str)(ocr.extract_text)
+generate.generate_question = limiter.limit(rate_limit_str)(generate.generate_question)
+embed.create_embedding = limiter.limit(rate_limit_str)(embed.create_embedding)
+retrieve.retrieve_similar = limiter.limit(rate_limit_str)(retrieve.retrieve_similar)
 
 
 # Logging middleware for requests
@@ -176,7 +208,11 @@ async def log_requests(request: Request, call_next):
     request_id = getattr(request.state, "request_id", "unknown")
     logger.info(
         f"Request [{request_id}]: {request.method} {request.url.path}",
-        extra={"request_id": request_id, "method": request.method, "path": request.url.path},
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+        },
     )
 
     response = await call_next(request)
@@ -202,8 +238,9 @@ async def health_check():
         - Service version info
     """
     import shutil
+
     from app.db.database import engine
-    
+
     checks = {}
     overall_status = "healthy"
     version = "1.0.0"
@@ -211,6 +248,7 @@ async def health_check():
     # Check Database connectivity
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         checks["database"] = "ok"
@@ -222,11 +260,14 @@ async def health_check():
     # Check OpenAI API connectivity
     try:
         from openai import OpenAI
+
         client = OpenAI(api_key=settings.openai_api_key)
         # Try a lightweight API call to verify connectivity
         if settings.openai_api_key:
             # Just verify the key is set and valid format (don't make actual API call for speed)
-            if len(settings.openai_api_key) > 20 and settings.openai_api_key.startswith("sk-"):
+            if len(settings.openai_api_key) > 20 and settings.openai_api_key.startswith(
+                "sk-"
+            ):
                 checks["openai_api"] = "ok"
             else:
                 checks["openai_api"] = "warning: invalid key format"
@@ -241,6 +282,7 @@ async def health_check():
     # Check vector DB
     try:
         import chromadb
+
         client = chromadb.PersistentClient(path=str(settings.vector_db_path))
         checks["vector_db"] = "ok"
     except Exception:
@@ -250,6 +292,7 @@ async def health_check():
     # Check disk space (basic check)
     try:
         import shutil
+
         total, used, free = shutil.disk_usage(settings.vector_db_path.parent)
         free_gb = free / (1024**3)
         if free_gb > 1:  # At least 1GB free
@@ -288,4 +331,3 @@ if __name__ == "__main__":
         reload=True,
         log_level=settings.log_level.lower(),
     )
-

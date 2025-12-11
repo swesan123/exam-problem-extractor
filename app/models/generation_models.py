@@ -1,4 +1,5 @@
 """Pydantic models for generation endpoint."""
+
 from typing import List, Optional
 
 from fastapi import UploadFile
@@ -30,7 +31,9 @@ class GenerateRequest(BaseModel):
     def validate_at_least_one_provided(self):
         """Ensure at least one of ocr_text or image_file is provided."""
         if not self.ocr_text and not self.image_file:
-            raise ValueError("At least one of 'ocr_text' or 'image_file' must be provided")
+            raise ValueError(
+                "At least one of 'ocr_text' or 'image_file' must be provided"
+            )
         return self
 
     model_config = {
@@ -49,9 +52,15 @@ class GenerateResponse(BaseModel):
 
     question: str = Field(..., description="Generated exam-style question")
     metadata: dict = Field(..., description="Metadata about the generation process")
-    processing_steps: List[str] = Field(..., description="List of processing steps performed")
-    question_id: Optional[str] = Field(None, description="ID of saved question (if class_id provided)")
-    class_id: Optional[str] = Field(None, description="ID of class question was saved to (if provided)")
+    processing_steps: List[str] = Field(
+        ..., description="List of processing steps performed"
+    )
+    question_id: Optional[str] = Field(
+        None, description="ID of saved question (if class_id provided)"
+    )
+    class_id: Optional[str] = Field(
+        None, description="ID of class question was saved to (if provided)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -66,4 +75,3 @@ class GenerateResponse(BaseModel):
             }
         }
     }
-

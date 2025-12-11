@@ -1,4 +1,5 @@
 """Question management API endpoints."""
+
 import logging
 from typing import Optional
 
@@ -6,12 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.question_models import (
-    QuestionCreate,
-    QuestionListResponse,
-    QuestionResponse,
-    QuestionUpdate,
-)
+from app.models.question_models import (QuestionCreate, QuestionListResponse,
+                                        QuestionResponse, QuestionUpdate)
 from app.services.question_service import QuestionService
 
 logger = logging.getLogger(__name__)
@@ -23,7 +20,9 @@ router = APIRouter(prefix="/api/questions", tags=["questions"])
 async def list_questions(
     class_id: Optional[str] = Query(None, description="Filter by class ID"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=100, description="Maximum number of records to return"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -40,21 +39,25 @@ async def list_questions(
     """
     try:
         service = QuestionService(db)
-        questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
+        questions, total = service.list_questions(
+            class_id=class_id, skip=skip, limit=limit
+        )
 
         # Convert to response models, mapping question_metadata to metadata
         question_responses = []
         for q in questions:
-            question_responses.append(QuestionResponse(
-                id=q.id,
-                class_id=q.class_id,
-                question_text=q.question_text,
-                solution=q.solution,
-                metadata=q.question_metadata or {},
-                source_image=q.source_image,
-                created_at=q.created_at,
-                updated_at=q.updated_at,
-            ))
+            question_responses.append(
+                QuestionResponse(
+                    id=q.id,
+                    class_id=q.class_id,
+                    question_text=q.question_text,
+                    solution=q.solution,
+                    metadata=q.question_metadata or {},
+                    source_image=q.source_image,
+                    created_at=q.created_at,
+                    updated_at=q.updated_at,
+                )
+            )
 
         return QuestionListResponse(
             questions=question_responses,
@@ -71,11 +74,17 @@ async def list_questions(
         ) from e
 
 
-@router.get("/classes/{class_id}/questions", response_model=QuestionListResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/classes/{class_id}/questions",
+    response_model=QuestionListResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def list_class_questions(
     class_id: str,
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=100, description="Maximum number of records to return"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -92,21 +101,25 @@ async def list_class_questions(
     """
     try:
         service = QuestionService(db)
-        questions, total = service.list_questions(class_id=class_id, skip=skip, limit=limit)
+        questions, total = service.list_questions(
+            class_id=class_id, skip=skip, limit=limit
+        )
 
         # Convert to response models, mapping question_metadata to metadata
         question_responses = []
         for q in questions:
-            question_responses.append(QuestionResponse(
-                id=q.id,
-                class_id=q.class_id,
-                question_text=q.question_text,
-                solution=q.solution,
-                metadata=q.question_metadata or {},
-                source_image=q.source_image,
-                created_at=q.created_at,
-                updated_at=q.updated_at,
-            ))
+            question_responses.append(
+                QuestionResponse(
+                    id=q.id,
+                    class_id=q.class_id,
+                    question_text=q.question_text,
+                    solution=q.solution,
+                    metadata=q.question_metadata or {},
+                    source_image=q.source_image,
+                    created_at=q.created_at,
+                    updated_at=q.updated_at,
+                )
+            )
 
         return QuestionListResponse(
             questions=question_responses,
@@ -123,7 +136,11 @@ async def list_class_questions(
         ) from e
 
 
-@router.post("/classes/{class_id}/questions", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/classes/{class_id}/questions",
+    response_model=QuestionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_question(
     class_id: str,
     question_data: QuestionCreate,
@@ -178,7 +195,9 @@ async def create_question(
         ) from e
 
 
-@router.get("/{question_id}", response_model=QuestionResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{question_id}", response_model=QuestionResponse, status_code=status.HTTP_200_OK
+)
 async def get_question(
     question_id: str,
     db: Session = Depends(get_db),
@@ -225,7 +244,9 @@ async def get_question(
         ) from e
 
 
-@router.put("/{question_id}", response_model=QuestionResponse, status_code=status.HTTP_200_OK)
+@router.put(
+    "/{question_id}", response_model=QuestionResponse, status_code=status.HTTP_200_OK
+)
 async def update_question(
     question_id: str,
     question_data: QuestionUpdate,

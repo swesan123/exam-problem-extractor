@@ -1,4 +1,5 @@
 """Pytest configuration and shared fixtures."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,4 +18,3 @@ def test_settings(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("VECTOR_DB_PATH", "./tests/test_vector_store")
     return None
-

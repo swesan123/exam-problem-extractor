@@ -1,4 +1,5 @@
 """Class management API endpoints."""
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -6,12 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import Question
-from app.models.class_models import (
-    ClassCreate,
-    ClassListResponse,
-    ClassResponse,
-    ClassUpdate,
-)
+from app.models.class_models import (ClassCreate, ClassListResponse,
+                                     ClassResponse, ClassUpdate)
 from app.services.class_service import ClassService
 from app.services.export_service import ExportFormat, ExportService
 
@@ -23,7 +20,9 @@ router = APIRouter(prefix="/api/classes", tags=["classes"])
 @router.get("", response_model=ClassListResponse, status_code=status.HTTP_200_OK)
 async def list_classes(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=100, description="Maximum number of records to return"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -304,4 +303,3 @@ async def export_class_questions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to export questions: {str(e)}",
         ) from e
-

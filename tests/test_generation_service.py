@@ -1,6 +1,8 @@
 """Unit tests for generation service."""
-import pytest
+
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.services.generation_service import GenerationService
 
@@ -10,12 +12,8 @@ def mock_openai_client():
     """Create a mock OpenAI client."""
     client = MagicMock()
     client.chat.completions.create.return_value = MagicMock(
-        choices=[
-            MagicMock(
-                message=MagicMock(content="Generated exam question")
-            )
-        ],
-        usage=MagicMock(total_tokens=100)
+        choices=[MagicMock(message=MagicMock(content="Generated exam question"))],
+        usage=MagicMock(total_tokens=100),
     )
     return client
 
@@ -35,4 +33,3 @@ def test_generate_with_metadata(mock_openai_client):
     assert "question" in result
     assert "metadata" in result
     assert result["metadata"]["tokens_used"] == 100
-

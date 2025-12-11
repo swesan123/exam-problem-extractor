@@ -17,6 +17,9 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 pymupdf>=1.23.0
 
+# Rate Limiting
+slowapi>=0.1.9
+
 # Database
 sqlalchemy>=2.0.0
 

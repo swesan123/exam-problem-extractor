@@ -1,6 +1,8 @@
 """Unit tests for embedding service."""
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.services.embedding_service import EmbeddingService
 
@@ -29,7 +31,9 @@ def mock_chromadb():
 def test_generate_embedding(mock_openai_client, mock_chromadb):
     """Test embedding generation."""
     mock_client, mock_collection = mock_chromadb
-    service = EmbeddingService(openai_client=mock_openai_client, vector_db_client=mock_client)
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
     embedding = service.generate_embedding("test text")
     assert len(embedding) == 1536
     assert all(isinstance(x, float) for x in embedding)
@@ -38,10 +42,11 @@ def test_generate_embedding(mock_openai_client, mock_chromadb):
 def test_store_embedding(mock_openai_client, mock_chromadb):
     """Test embedding storage."""
     mock_client, mock_collection = mock_chromadb
-    service = EmbeddingService(openai_client=mock_openai_client, vector_db_client=mock_client)
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
     embedding = [0.1] * 1536
     metadata = {"source": "test", "chunk_id": "chunk_1"}
     chunk_id = service.store_embedding("test text", embedding, metadata)
     assert chunk_id == "chunk_1"
     mock_collection.add.assert_called_once()
-

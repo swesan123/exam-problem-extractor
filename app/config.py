@@ -1,4 +1,5 @@
 """Application configuration using pydantic-settings."""
+
 from pathlib import Path
 from typing import Literal
 
@@ -61,6 +62,18 @@ class Settings(BaseSettings):
         description="Request timeout in seconds",
     )
 
+    # Security
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:5173",
+        description="Comma-separated list of allowed CORS origins",
+    )
+    rate_limit_enabled: bool = Field(
+        default=True, description="Enable rate limiting"
+    )
+    rate_limit_per_minute: int = Field(
+        default=60, ge=1, description="Rate limit per minute per IP"
+    )
+
     def __init__(self, **kwargs):
         """Initialize settings and validate required fields."""
         super().__init__(**kwargs)
@@ -73,4 +86,3 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-

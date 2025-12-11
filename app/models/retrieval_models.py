@@ -1,4 +1,5 @@
 """Pydantic models for retrieval endpoint."""
+
 from typing import Dict, List
 
 from pydantic import BaseModel, Field
@@ -8,7 +9,9 @@ class RetrievedChunk(BaseModel):
     """A retrieved chunk with similarity score."""
 
     text: str = Field(..., description="Text content of the retrieved chunk")
-    score: float = Field(..., ge=0.0, le=1.0, description="Similarity score (0.0 to 1.0)")
+    score: float = Field(
+        ..., ge=0.0, le=1.0, description="Similarity score (0.0 to 1.0)"
+    )
     metadata: Dict = Field(..., description="Metadata associated with the chunk")
     chunk_id: str = Field(..., description="Unique identifier for the chunk")
 
@@ -49,7 +52,9 @@ class RetrieveResponse(BaseModel):
     """Response model for retrieval endpoint."""
 
     results: List[RetrievedChunk] = Field(..., description="List of retrieved chunks")
-    query_embedding_dim: int = Field(..., ge=1, description="Dimension of the query embedding")
+    query_embedding_dim: int = Field(
+        ..., ge=1, description="Dimension of the query embedding"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -66,4 +71,3 @@ class RetrieveResponse(BaseModel):
             }
         }
     }
-

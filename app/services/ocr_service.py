@@ -1,4 +1,5 @@
 """OCR service for extracting text from images using OpenAI Vision API."""
+
 import base64
 import time
 from pathlib import Path
@@ -110,11 +111,12 @@ class OCRService:
                 last_error = e
                 if attempt < max_retries - 1:
                     # Exponential backoff: wait 2^attempt seconds
-                    wait_time = 2 ** attempt
+                    wait_time = 2**attempt
                     time.sleep(wait_time)
                 else:
-                    raise Exception(f"OCR extraction failed after {max_retries} attempts: {str(e)}") from last_error
+                    raise Exception(
+                        f"OCR extraction failed after {max_retries} attempts: {str(e)}"
+                    ) from last_error
 
         # Should not reach here, but handle just in case
         raise Exception(f"OCR extraction failed: {str(last_error)}") from last_error
-

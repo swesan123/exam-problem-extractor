@@ -1,4 +1,5 @@
 """Retrieval service for semantic search over vector database."""
+
 from typing import List, Optional
 
 from openai import OpenAI
@@ -95,4 +96,3 @@ class RetrievalService:
 
         except Exception as e:
             raise Exception(f"Retrieval failed: {str(e)}") from e
-

@@ -1,7 +1,9 @@
 """Unit tests for OCR service."""
-import pytest
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.services.ocr_service import OCRService
 
@@ -11,11 +13,7 @@ def mock_openai_client():
     """Create a mock OpenAI client."""
     client = MagicMock()
     client.chat.completions.create.return_value = MagicMock(
-        choices=[
-            MagicMock(
-                message=MagicMock(content="Extracted text from image")
-            )
-        ]
+        choices=[MagicMock(message=MagicMock(content="Extracted text from image"))]
     )
     return client
 
@@ -49,4 +47,3 @@ def test_extract_text_file_not_found(mock_openai_client):
     service = OCRService(openai_client=mock_openai_client)
     with pytest.raises(FileNotFoundError):
         service.extract_text(Path("nonexistent.png"))
-

@@ -1,4 +1,5 @@
 """Generation service for creating exam-style questions using OpenAI GPT."""
+
 from typing import Dict, List, Optional
 
 from openai import OpenAI
@@ -19,9 +20,7 @@ class GenerationService:
         self.client = openai_client or OpenAI(api_key=settings.openai_api_key)
         self.model = settings.generation_model
 
-    def generate_question(
-        self, ocr_text: str, retrieved_context: List[str]
-    ) -> str:
+    def generate_question(self, ocr_text: str, retrieved_context: List[str]) -> str:
         """
         Generate formatted exam question.
 
@@ -175,5 +174,6 @@ Generate a clean, well-formatted exam question with a complete solution based on
             }
 
         except Exception as e:
-            raise Exception(f"Question generation with solution failed: {str(e)}") from e
-
+            raise Exception(
+                f"Question generation with solution failed: {str(e)}"
+            ) from e
