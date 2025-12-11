@@ -7,8 +7,6 @@ from typing import List, Optional
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
                      UploadFile, status)
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -26,7 +24,8 @@ from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generation"])
-limiter = Limiter(key_func=get_remote_address)
+# Limiter will be set by main.py after app initialization
+limiter = None
 
 
 @router.post("", response_model=GenerateResponse, status_code=status.HTTP_200_OK)

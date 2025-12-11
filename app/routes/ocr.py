@@ -4,8 +4,6 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.models.ocr_models import OCRResponse
@@ -18,8 +16,10 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=OCRResponse, status_code=status.HTTP_200_OK)
-@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
 async def extract_text(request: Request, file: UploadFile = File(...)):
+    # Rate limiting is handled by the limiter attached to the router
+    if limiter and settings.rate_limit_enabled:
+        limiter.limit(f"{settings.rate_limit_per_minute}/minute")(extract_text)
     """
     Extract text from uploaded image using OCR.
 

@@ -1,15 +1,14 @@
 """Embedding route endpoint."""
 
 from fastapi import APIRouter, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.models.embedding_models import EmbeddingRequest, EmbeddingResponse
 from app.services.embedding_service import EmbeddingService
 
 router = APIRouter(prefix="/embed", tags=["embedding"])
-limiter = Limiter(key_func=get_remote_address)
+# Limiter will be set by main.py after app initialization
+limiter = None
 
 
 @router.post("", response_model=EmbeddingResponse, status_code=status.HTTP_200_OK)

@@ -1,8 +1,6 @@
 """Retrieval route endpoint."""
 
 from fastapi import APIRouter, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.models.retrieval_models import RetrieveRequest, RetrieveResponse
@@ -10,7 +8,8 @@ from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 
 router = APIRouter(prefix="/retrieve", tags=["retrieval"])
-limiter = Limiter(key_func=get_remote_address)
+# Limiter will be set by main.py after app initialization
+limiter = None
 
 
 @router.post("", response_model=RetrieveResponse, status_code=status.HTTP_200_OK)
