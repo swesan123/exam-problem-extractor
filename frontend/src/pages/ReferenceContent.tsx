@@ -13,7 +13,18 @@ interface FileWithStatus {
   extractedText?: string
 }
 
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
 const ReferenceContent = () => {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // Redirect to classes page since reference content is now managed per class
+    navigate('/classes', { replace: true })
+  }, [navigate])
+
+  return null
   const [classes, setClasses] = useState<Class[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [examSource, setExamSource] = useState('')
