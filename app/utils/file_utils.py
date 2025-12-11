@@ -63,7 +63,7 @@ def save_temp_file(file: UploadFile) -> Path:
         if size_mb > MAX_FILE_SIZE_MB:
             cleanup_temp_file(temp_path)
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"File size ({size_mb:.2f} MB) exceeds maximum allowed size ({MAX_FILE_SIZE_MB} MB)",
             )
 

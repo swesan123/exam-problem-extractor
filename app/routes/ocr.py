@@ -1,8 +1,9 @@
 """OCR route endpoint."""
+import logging
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
 from app.models.ocr_models import OCRResponse
 from app.services.ocr_service import OCRService
@@ -13,27 +14,36 @@ from app.utils.file_utils import (
     validate_upload_file,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
 
 @router.post("", response_model=OCRResponse, status_code=status.HTTP_200_OK)
-async def extract_text(file: UploadFile = File(...)):
+async def extract_text(request: Request, file: UploadFile = File(...)):
     """
-    Extract text from uploaded image using OCR.
+    Extract text from uploaded image or PDF using OCR.
 
     Args:
-        file: Image file (PNG, JPG, JPEG, max 10MB)
+        request: FastAPI Request object
+        file: Image file (PNG, JPG, JPEG) or PDF file (max 10MB)
 
     Returns:
         OCRResponse with extracted text and metadata
     """
     temp_path: Path | None = None
     try:
+        logger.info(
+            f"OCR request received: filename={file.filename}, "
+            f"content_type={file.content_type}, size={file.size if hasattr(file, 'size') else 'unknown'}"
+        )
+
         # Validate file
         validate_upload_file(file)
 
         # Save temporary file
         temp_path = save_temp_file(file)
+        logger.debug(f"Saved temporary file: {temp_path}")
 
         # Initialize OCR service
         ocr_service = OCRService()
@@ -86,6 +96,7 @@ async def extract_text(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"OCR processing failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OCR processing failed: {str(e)}",

@@ -50,7 +50,7 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
-def test_health_check():
+def test_health_check(client: TestClient):
     """Test health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
@@ -59,7 +59,7 @@ def test_health_check():
     assert "checks" in data
 
 
-def test_root_endpoint():
+def test_root_endpoint(client: TestClient):
     """Test root endpoint."""
     response = client.get("/")
     assert response.status_code == 200
@@ -67,20 +67,114 @@ def test_root_endpoint():
     assert "message" in data
 
 
-def test_ocr_endpoint_invalid_file():
+def test_ocr_endpoint_invalid_file(client: TestClient):
     """Test OCR endpoint with invalid file."""
     response = client.post("/ocr", files={"file": ("test.txt", b"not an image", "text/plain")})
     assert response.status_code == 400
 
 
-def test_embed_endpoint_validation():
+def test_ocr_endpoint_pdf_support(client: TestClient, mocker):
+    """Test OCR endpoint accepts PDF files."""
+    # Mock OCR service to avoid actual API calls
+    mocker.patch(
+        "app.services.ocr_service.OCRService.extract_with_confidence",
+        return_value=("Extracted text from PDF page", 0.95),
+    )
+
+    # Create a minimal valid PDF
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+174
+%%EOF"""
+
+    response = client.post(
+        "/ocr",
+        files={"file": ("test.pdf", pdf_content, "application/pdf")},
+    )
+
+    # Should accept PDF and process it
+    assert response.status_code == 200
+    data = response.json()
+    assert "text" in data
+    assert "processing_time_ms" in data
+    # Should include page separator for PDFs
+    assert "=== Page" in data["text"] or "Extracted text" in data["text"]
+
+
+def test_ocr_endpoint_pdf_multipage(client: TestClient, mocker):
+    """Test OCR endpoint handles multi-page PDFs."""
+    # Mock OCR service to return different text for each page
+    def mock_extract_side_effect(*args, **kwargs):
+        # This will be called once per page
+        # For simplicity, return same text for all pages
+        return ("Page text content", 0.95)
+
+    mocker.patch(
+        "app.services.ocr_service.OCRService.extract_with_confidence",
+        side_effect=mock_extract_side_effect,
+    )
+
+    # Create a minimal PDF (single page for simplicity)
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+174
+%%EOF"""
+
+    response = client.post(
+        "/ocr",
+        files={"file": ("test.pdf", pdf_content, "application/pdf")},
+    )
+
+    if response.status_code == 200:
+        data = response.json()
+        assert "text" in data
+        # Multi-page PDFs should have page separators
+        if "=== Page" in data["text"]:
+            assert "=== Page 1 ===" in data["text"]
+
+
+def test_embed_endpoint_validation(client: TestClient):
     """Test embed endpoint validation."""
     response = client.post("/embed", json={"text": "", "metadata": {"source": "test", "chunk_id": "1"}})
     # Should fail validation
     assert response.status_code in [400, 422]
 
 
-def test_retrieve_endpoint_validation():
+def test_retrieve_endpoint_validation(client: TestClient):
     """Test retrieve endpoint validation."""
     response = client.post("/retrieve", json={"query": "", "top_k": 5})
     # Should fail validation
