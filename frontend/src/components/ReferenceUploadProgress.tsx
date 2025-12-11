@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { jobService, JobStatus } from '../services/jobService'
-import { useReferenceJobPolling } from '../hooks/useReferenceJobPolling'
 
 interface ReferenceUploadProgressProps {
   classId: string
@@ -13,6 +12,7 @@ export function ReferenceUploadProgress({
 }: ReferenceUploadProgressProps) {
   const [activeJobs, setActiveJobs] = useState<JobStatus[]>([])
   const [isExpanded, setIsExpanded] = useState(false)
+  const prevActiveCountRef = useRef(0)
 
   // Load active jobs for this class
   useEffect(() => {
@@ -28,6 +28,11 @@ export function ReferenceUploadProgress({
           active.map((job) => jobService.getJobStatus(job.job_id))
         )
         setActiveJobs(jobStatuses)
+
+        if (active.length === 0 && prevActiveCountRef.current > 0 && onJobComplete) {
+          onJobComplete()
+        }
+        prevActiveCountRef.current = active.length
       } catch (error) {
         console.error('Failed to load jobs:', error)
       }
@@ -37,7 +42,7 @@ export function ReferenceUploadProgress({
     const interval = setInterval(loadJobs, 3000) // Refresh every 3 seconds
 
     return () => clearInterval(interval)
-  }, [classId])
+  }, [classId, onJobComplete])
 
   if (activeJobs.length === 0) {
     return null
