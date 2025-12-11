@@ -6,7 +6,12 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.models.ocr_models import OCRResponse
 from app.services.ocr_service import OCRService
-from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_image_file
+from app.utils.file_utils import (
+    cleanup_temp_file,
+    convert_pdf_to_images,
+    save_temp_file,
+    validate_upload_file,
+)
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
@@ -25,7 +30,7 @@ async def extract_text(file: UploadFile = File(...)):
     temp_path: Path | None = None
     try:
         # Validate file
-        validate_image_file(file)
+        validate_upload_file(file)
 
         # Save temporary file
         temp_path = save_temp_file(file)
@@ -33,8 +38,42 @@ async def extract_text(file: UploadFile = File(...)):
         # Initialize OCR service
         ocr_service = OCRService()
 
-        # Extract text
         start_time = time.time()
+
+        # Handle PDF by converting each page to an image
+        if file.content_type == "application/pdf":
+            image_paths = convert_pdf_to_images(temp_path)
+            all_text_parts = []
+            confidence_values = []
+
+            try:
+                for page_num, image_path in enumerate(image_paths, start=1):
+                    text, confidence = ocr_service.extract_with_confidence(image_path)
+                    page_header = f"=== Page {page_num} ===\n"
+                    all_text_parts.append(page_header + text)
+                    if confidence is not None:
+                        confidence_values.append(confidence)
+
+                combined_text = "\n\n".join(all_text_parts)
+                avg_confidence = (
+                    sum(confidence_values) / len(confidence_values)
+                    if confidence_values
+                    else None
+                )
+            finally:
+                # Clean up generated images
+                for img_path in image_paths:
+                    cleanup_temp_file(img_path)
+
+            processing_time_ms = int((time.time() - start_time) * 1000)
+
+            return OCRResponse(
+                text=combined_text,
+                confidence=avg_confidence,
+                processing_time_ms=processing_time_ms,
+            )
+
+        # Default image flow
         text, confidence = ocr_service.extract_with_confidence(temp_path)
         processing_time_ms = int((time.time() - start_time) * 1000)
 

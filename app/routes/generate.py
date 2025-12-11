@@ -15,7 +15,7 @@ from app.services.ocr_service import OCRService
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 from app.services.question_service import QuestionService
-from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_image_file
+from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def generate_question(
 
         # Step 1: OCR extraction (if image provided)
         if image_file:
-            validate_image_file(image_file)
+            validate_upload_file(image_file)
             temp_path = save_temp_file(image_file)
             ocr_service = OCRService()
             ocr_text = ocr_service.extract_text(temp_path)
