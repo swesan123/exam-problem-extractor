@@ -13,14 +13,14 @@ interface FileWithStatus {
 const Generate = () => {
   const [classes, setClasses] = useState<Class[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string>('')
-  const [ocrText, setOcrText] = useState('')
-  const [retrievedContext, setRetrievedContext] = useState('')
+  const [textInput, setTextInput] = useState('')
   const [files, setFiles] = useState<FileWithStatus[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [includeSolution, setIncludeSolution] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<GenerateResponse | null>(null)
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -64,8 +64,6 @@ const Generate = () => {
     if (newFiles.length > 0) {
       setFiles((prev) => [...prev, ...newFiles])
       setError(null)
-      // Clear OCR text when files are added
-      setOcrText('')
     }
   }, [])
 
@@ -143,7 +141,7 @@ const Generate = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!ocrText && files.length === 0) {
+    if (!textInput && files.length === 0) {
       setError('Please provide either OCR text or upload an image/PDF')
       return
     }
@@ -151,17 +149,34 @@ const Generate = () => {
     // Use the first file if multiple files are selected
     const imageFile = files.length > 0 ? files[0].file : null
 
+    // Simple ETA heuristic based on file size/count
+    const estimateSeconds = () => {
+      if (imageFile) {
+        const sizeMb = imageFile.size / (1024 * 1024)
+        return Math.max(8, Math.round(6 + sizeMb * 3))
+      }
+      return 5
+    }
+    const etaSeconds = estimateSeconds()
+    setEstimatedTime(`~${etaSeconds} sec`)
+
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
       const request: GenerateRequest = {
-        ocr_text: ocrText || undefined,
-        image_file: imageFile || undefined,
-        retrieved_context: retrievedContext || undefined,
         include_solution: includeSolution,
         class_id: selectedClassId || undefined,
+      }
+
+      if (imageFile) {
+        request.image_file = imageFile
+        if (textInput) {
+          request.retrieved_context = textInput
+        }
+      } else {
+        request.ocr_text = textInput || undefined
       }
 
       const response = await generateService.generate(request)
@@ -169,8 +184,7 @@ const Generate = () => {
 
       // Reset form if question was saved to class
       if (response.question_id) {
-        setOcrText('')
-        setRetrievedContext('')
+        setTextInput('')
         setFiles([])
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
@@ -182,6 +196,12 @@ const Generate = () => {
       setLoading(false)
     }
   }
+
+  const hasFiles = files.length > 0
+  const textareaLabel = hasFiles ? 'Context for Images/PDFs (Optional)' : 'Enter OCR text'
+  const textareaPlaceholder = hasFiles
+    ? 'Add context about the images/PDFs to help generate better questions...'
+    : 'Paste extracted text here...'
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -260,93 +280,67 @@ const Generate = () => {
                     Images (PNG, JPG, JPEG) or PDFs (max 10MB each)
                   </p>
                 </label>
-              </div>
 
-              {/* File List */}
-              {files.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {files.map((fileWithStatus, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200"
-                    >
-                      <div className="flex items-center flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {fileWithStatus.file.name}
-                        </p>
-                        <span className="ml-2 text-xs text-gray-500">
-                          ({(fileWithStatus.file.size / 1024).toFixed(1)} KB)
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(index)}
-                        className="ml-2 text-red-600 hover:text-red-800"
-                        title="Remove file"
+                {/* File List (inline in dropzone) */}
+                {files.length > 0 && (
+                  <div className="mt-4 space-y-2 text-left">
+                    {files.map((fileWithStatus, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-2 bg-white rounded border border-gray-200"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                        <div className="flex items-center flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {fileWithStatus.file.name}
+                          </p>
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({(fileWithStatus.file.size / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="ml-2 text-red-600 hover:text-red-800"
+                          title="Remove file"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                  {files.length > 1 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Note: Only the first file will be used for generation
-                    </p>
-                  )}
-                </div>
-              )}
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    {files.length > 1 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Note: Only the first file will be used for generation
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="mb-4">
-              <label htmlFor="ocr_text" className="block text-sm font-medium text-gray-700 mb-1">
-                Or Enter OCR Text
+              <label htmlFor="text_input" className="block text-sm font-medium text-gray-700 mb-1">
+                {textareaLabel}
               </label>
               <textarea
-                id="ocr_text"
+                id="text_input"
                 rows={6}
-                value={ocrText}
-                onChange={(e) => {
-                  setOcrText(e.target.value)
-                  // Clear files when text is entered
-                  if (e.target.value) {
-                    setFiles([])
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = ''
-                    }
-                  }
-                }}
-                placeholder="Paste extracted text here..."
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder={textareaPlaceholder}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-            </div>
-
-            <div className="mb-4">
-              <label htmlFor="retrieved_context" className="block text-sm font-medium text-gray-700 mb-1">
-                Context for Images/PDFs (Optional)
-              </label>
-              <textarea
-                id="retrieved_context"
-                rows={3}
-                value={retrievedContext}
-                onChange={(e) => setRetrievedContext(e.target.value)}
-                placeholder="Add context about the images/PDFs to help generate better questions..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Provide additional context about the uploaded files to improve question generation
-              </p>
             </div>
 
             <div className="mb-4">
@@ -369,11 +363,16 @@ const Generate = () => {
 
             <button
               type="submit"
-              disabled={loading || (!ocrText && files.length === 0)}
+              disabled={loading || (!textInput && files.length === 0)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Generating...' : 'Generate Question'}
+              {loading
+                ? `Generating...${estimatedTime ? ` (${estimatedTime})` : ''}`
+                : 'Generate Question'}
             </button>
+            {estimatedTime && !loading && (
+              <p className="mt-2 text-xs text-gray-500">Estimated time: {estimatedTime}</p>
+            )}
           </form>
         </div>
 

@@ -131,58 +131,6 @@ const AddReferenceContentModal = ({
     setFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const processFile = async (fileWithStatus: FileWithStatus, index: number): Promise<string> => {
-    setFiles((prev) =>
-      prev.map((f, i) => (i === index ? { ...f, status: 'processing', progress: 0 } : f))
-    )
-
-    try {
-      setFiles((prev) =>
-        prev.map((f, i) => (i === index ? { ...f, progress: 50 } : f))
-      )
-
-      const ocrResponse = await ocrService.extractText(fileWithStatus.file)
-      const extractedText = ocrResponse.text
-
-      if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error('No text extracted from file')
-      }
-
-      setFiles((prev) =>
-        prev.map((f, i) =>
-          i === index ? { ...f, status: 'success', progress: 100, extractedText } : f
-        )
-      )
-
-      return extractedText
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to process file'
-      setFiles((prev) =>
-        prev.map((f, i) =>
-          i === index ? { ...f, status: 'error', error: errorMessage } : f
-        )
-      )
-      throw err
-    }
-  }
-
-  const embedText = async (text: string, fileName: string): Promise<void> => {
-    const chunkId = `chunk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    const request: EmbeddingRequest = {
-      text: text.trim(),
-      metadata: {
-        source: examSource || fileName || 'uploaded_file',
-        chunk_id: chunkId,
-        page: undefined,
-        exam_type: examType || undefined,
-        class_id: classId,
-      },
-    }
-
-    await embedService.embedText(request)
-  }
-
   const handleProcessAll = async () => {
     if (files.length === 0) {
       setError('Please add at least one file')
@@ -195,7 +143,7 @@ const AddReferenceContentModal = ({
 
     try {
       const fileList = files.map((f) => f.file)
-      const response = await jobService.uploadReferenceContent(
+      await jobService.uploadReferenceContent(
         classId,
         fileList,
         examSource || undefined,
