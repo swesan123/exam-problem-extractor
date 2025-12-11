@@ -126,3 +126,25 @@ startxref
             # Clean up PDF
             if pdf_path.exists():
                 pdf_path.unlink()
+
+    def test_convert_pdf_to_images_invalid_file(self):
+        """Test PDF conversion with invalid/corrupted PDF raises error."""
+        # Create an invalid PDF file
+        invalid_pdf_path = Path("/tmp/invalid.pdf")
+        invalid_pdf_path.write_bytes(b"Not a valid PDF content")
+
+        try:
+            # Should raise an exception for invalid PDF
+            with pytest.raises(Exception):  # fitz.open will raise an exception
+                file_utils.convert_pdf_to_images(invalid_pdf_path)
+        finally:
+            # Clean up
+            if invalid_pdf_path.exists():
+                invalid_pdf_path.unlink()
+
+    def test_convert_pdf_to_images_nonexistent_file(self):
+        """Test PDF conversion with non-existent file raises error."""
+        nonexistent_path = Path("/tmp/nonexistent.pdf")
+        # Should raise FileNotFoundError or similar
+        with pytest.raises(Exception):
+            file_utils.convert_pdf_to_images(nonexistent_path)

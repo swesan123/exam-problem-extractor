@@ -171,6 +171,20 @@ startxref
             assert "=== Page 1 ===" in data["text"]
 
 
+def test_ocr_endpoint_pdf_invalid_file(client: TestClient):
+    """Test OCR endpoint handles invalid PDF files gracefully."""
+    # Create invalid PDF content
+    invalid_pdf_content = b"Not a valid PDF file"
+
+    response = client.post(
+        "/ocr",
+        files={"file": ("invalid.pdf", invalid_pdf_content, "application/pdf")},
+    )
+
+    # Should return an error (400 or 500 depending on when validation happens)
+    assert response.status_code in [400, 500]
+
+
 def test_embed_endpoint_validation(client: TestClient):
     """Test embed endpoint validation."""
     response = client.post(
