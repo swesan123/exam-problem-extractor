@@ -91,10 +91,13 @@ def test_generate_endpoint_with_class_id(client: TestClient, sample_class: Class
     """Test generate endpoint with class_id saves question to class."""
     # Mock OpenAI services
     mocker.patch("app.services.ocr_service.OCRService.extract_text", return_value="Test OCR text")
-    mocker.patch(
-        "app.services.retrieval_service.RetrievalService.retrieve",
-        return_value=[]
-    )
+    # Mock EmbeddingService to avoid ChromaDB singleton issues
+    mock_embedding_service = mocker.MagicMock()
+    mocker.patch("app.routes.generate.EmbeddingService", return_value=mock_embedding_service)
+    # Mock RetrievalService
+    mock_retrieval_service = mocker.MagicMock()
+    mock_retrieval_service.retrieve.return_value = []
+    mocker.patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service)
     mocker.patch(
         "app.services.generation_service.GenerationService.generate_with_metadata",
         return_value={
@@ -134,10 +137,13 @@ def test_generate_endpoint_without_class_id(client: TestClient, mocker):
     """Test generate endpoint without class_id (backward compatible)."""
     # Mock OpenAI services
     mocker.patch("app.services.ocr_service.OCRService.extract_text", return_value="Test OCR text")
-    mocker.patch(
-        "app.services.retrieval_service.RetrievalService.retrieve",
-        return_value=[]
-    )
+    # Mock EmbeddingService to avoid ChromaDB singleton issues
+    mock_embedding_service = mocker.MagicMock()
+    mocker.patch("app.routes.generate.EmbeddingService", return_value=mock_embedding_service)
+    # Mock RetrievalService
+    mock_retrieval_service = mocker.MagicMock()
+    mock_retrieval_service.retrieve.return_value = []
+    mocker.patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service)
     mocker.patch(
         "app.services.generation_service.GenerationService.generate_with_metadata",
         return_value={
@@ -165,10 +171,13 @@ def test_generate_endpoint_invalid_class_id(client: TestClient, mocker):
     """Test generate endpoint with invalid class_id doesn't fail."""
     # Mock OpenAI services
     mocker.patch("app.services.ocr_service.OCRService.extract_text", return_value="Test OCR text")
-    mocker.patch(
-        "app.services.retrieval_service.RetrievalService.retrieve",
-        return_value=[]
-    )
+    # Mock EmbeddingService to avoid ChromaDB singleton issues
+    mock_embedding_service = mocker.MagicMock()
+    mocker.patch("app.routes.generate.EmbeddingService", return_value=mock_embedding_service)
+    # Mock RetrievalService
+    mock_retrieval_service = mocker.MagicMock()
+    mock_retrieval_service.retrieve.return_value = []
+    mocker.patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service)
     mocker.patch(
         "app.services.generation_service.GenerationService.generate_with_metadata",
         return_value={
