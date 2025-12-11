@@ -1,10 +1,20 @@
 """Generation route endpoint."""
+
 import json
 import logging
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -15,7 +25,12 @@ from app.services.ocr_service import OCRService
 from app.services.embedding_service import EmbeddingService
 from app.services.retrieval_service import RetrievalService
 from app.services.question_service import QuestionService
-from app.utils.file_utils import cleanup_temp_file, save_temp_file, validate_upload_file
+from app.utils.file_utils import (
+    cleanup_temp_file,
+    convert_pdf_to_images,
+    save_temp_file,
+    validate_upload_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +84,25 @@ async def generate_question(
             validate_upload_file(image_file)
             temp_path = save_temp_file(image_file)
             ocr_service = OCRService()
-            ocr_text = ocr_service.extract_text(temp_path)
+
+            # Handle PDF files by converting to images first
+            if image_file.content_type == "application/pdf":
+                image_paths = convert_pdf_to_images(temp_path)
+                all_text_parts = []
+                try:
+                    for page_num, image_path in enumerate(image_paths, start=1):
+                        text = ocr_service.extract_text(image_path)
+                        page_header = f"=== Page {page_num} ===\n"
+                        all_text_parts.append(page_header + text)
+                    ocr_text = "\n\n".join(all_text_parts)
+                finally:
+                    # Clean up generated images
+                    for img_path in image_paths:
+                        cleanup_temp_file(img_path)
+            else:
+                # Handle regular image files
+                ocr_text = ocr_service.extract_text(temp_path)
+
             processing_steps.append("ocr")
 
         if not ocr_text:
@@ -83,6 +116,7 @@ async def generate_question(
         if retrieved_context:
             # Parse JSON string if provided
             import json
+
             try:
                 context_list = json.loads(retrieved_context)
                 if not isinstance(context_list, list):
@@ -91,10 +125,12 @@ async def generate_question(
                 # If not valid JSON, treat as single string
                 context_list = [retrieved_context]
         else:
-            # Perform retrieval
+            # Perform retrieval (filter by class_id if provided)
             embedding_service = EmbeddingService()
             retrieval_service = RetrievalService(embedding_service)
-            retrieved_chunks = retrieval_service.retrieve(ocr_text, top_k=5)
+            retrieved_chunks = retrieval_service.retrieve(
+                ocr_text, top_k=5, class_id=class_id
+            )
             context_list = [chunk.text for chunk in retrieved_chunks]
             processing_steps.append("retrieval")
 
@@ -121,12 +157,12 @@ async def generate_question(
         if class_id:
             try:
                 question_service = QuestionService(db)
-                
+
                 # Extract solution if included
                 solution_text = None
                 if include_solution and result.get("solution"):
                     solution_text = result["solution"]
-                
+
                 # Create question data
                 question_data = QuestionCreate(
                     class_id=class_id,
@@ -139,13 +175,15 @@ async def generate_question(
                     },
                     source_image=str(temp_path) if temp_path else None,
                 )
-                
+
                 saved_question = question_service.create_question(question_data)
                 question_id = saved_question.id
                 saved_class_id = class_id
-                
-                logger.info(f"Saved generated question {question_id} to class {class_id}")
-                
+
+                logger.info(
+                    f"Saved generated question {question_id} to class {class_id}"
+                )
+
             except ValueError as e:
                 # Class not found - log but don't fail the request
                 logger.warning(f"Failed to save question to class {class_id}: {e}")
@@ -172,6 +210,7 @@ async def generate_question(
         # Sanitize the full error message, not just the exception
         full_error_msg = f"Question generation failed: {str(e)}"
         from app.utils.error_utils import sanitize_error_message
+
         safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -181,4 +220,3 @@ async def generate_question(
         # Clean up temporary file
         if temp_path:
             cleanup_temp_file(temp_path)
-

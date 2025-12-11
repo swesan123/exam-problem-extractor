@@ -31,9 +31,11 @@ async def retrieve_similar(request: Request, retrieve_request: RetrieveRequest):
         embedding_service = EmbeddingService()
         retrieval_service = RetrievalService(embedding_service)
 
-        # Retrieve similar content
+        # Retrieve similar content (filter by class_id if provided)
         results = retrieval_service.retrieve_with_scores(
-            retrieve_request.query, retrieve_request.top_k
+            retrieve_request.query,
+            retrieve_request.top_k,
+            class_id=retrieve_request.class_id,
         )
 
         # Get embedding dimension (from embedding model)
@@ -59,6 +61,7 @@ async def retrieve_similar(request: Request, retrieve_request: RetrieveRequest):
         # Sanitize the full error message, not just the exception
         full_error_msg = f"Retrieval failed: {str(e)}"
         from app.utils.error_utils import sanitize_error_message
+
         safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

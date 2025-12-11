@@ -1,6 +1,6 @@
 """Pydantic models for retrieval endpoint."""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -37,12 +37,17 @@ class RetrieveRequest(BaseModel):
         le=100,
         description="Number of top results to retrieve",
     )
+    class_id: Optional[str] = Field(
+        default=None,
+        description="Optional class ID to filter results by (only returns chunks from this class)",
+    )
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "query": "quadratic equations",
                 "top_k": 5,
+                "class_id": "class_abc123",
             }
         }
     }

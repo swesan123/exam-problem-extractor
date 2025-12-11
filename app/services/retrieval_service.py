@@ -26,26 +26,30 @@ class RetrievalService:
         self.embedding_service = embedding_service
         self.client = openai_client or embedding_service.client
 
-    def retrieve(self, query: str, top_k: int) -> List[RetrievedChunk]:
+    def retrieve(self, query: str, top_k: int, class_id: Optional[str] = None) -> List[RetrievedChunk]:
         """
         Retrieve top_k similar chunks without scores.
 
         Args:
             query: Query text
             top_k: Number of results to retrieve
+            class_id: Optional class ID to filter results by
 
         Returns:
             List of RetrievedChunk objects
         """
-        return self.retrieve_with_scores(query, top_k)
+        return self.retrieve_with_scores(query, top_k, class_id)
 
-    def retrieve_with_scores(self, query: str, top_k: int) -> List[RetrievedChunk]:
+    def retrieve_with_scores(
+        self, query: str, top_k: int, class_id: Optional[str] = None
+    ) -> List[RetrievedChunk]:
         """
         Retrieve top_k similar chunks with similarity scores.
 
         Args:
             query: Query text
             top_k: Number of results to retrieve
+            class_id: Optional class ID to filter results by (only returns chunks from this class)
 
         Returns:
             List of RetrievedChunk objects sorted by score (descending)
@@ -63,11 +67,17 @@ class RetrievalService:
             # Generate query embedding
             query_embedding = self.embedding_service.generate_embedding(query)
 
+            # Build query filter if class_id provided
+            where_filter = None
+            if class_id:
+                where_filter = {"class_id": class_id}
+
             # Perform similarity search
             collection = self.embedding_service.collection
             results = collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
+                where=where_filter,  # Filter by class_id if provided
                 include=["documents", "metadatas", "distances"],
             )
 
