@@ -1,11 +1,11 @@
 """File handling utilities."""
+
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import fitz  # PyMuPDF
 from fastapi import HTTPException, UploadFile, status
-
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
 ALLOWED_PDF_TYPES = {"application/pdf"}
@@ -134,4 +134,3 @@ def get_file_size_mb(path: Path) -> float:
         return 0.0
     size_bytes = path.stat().st_size
     return size_bytes / (1024 * 1024)
-

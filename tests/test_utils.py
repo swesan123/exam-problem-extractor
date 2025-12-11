@@ -1,10 +1,11 @@
 """Unit tests for utility functions."""
+
 import io
 import tempfile
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException, UploadFile
-from pathlib import Path
 
 from app.utils import chunking, file_utils, text_cleaning
 
@@ -125,4 +126,3 @@ startxref
             # Clean up PDF
             if pdf_path.exists():
                 pdf_path.unlink()
-
