@@ -11,6 +11,7 @@ def mock_embedding_service():
     """Create a mock embedding service."""
     service = MagicMock(spec=EmbeddingService)
     service.generate_embedding.return_value = [0.1] * 1536
+    service.client = MagicMock()  # Add client attribute
     service.collection = MagicMock()
     service.collection.query.return_value = {
         "ids": [["chunk_1", "chunk_2"]],

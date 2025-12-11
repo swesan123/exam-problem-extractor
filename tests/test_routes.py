@@ -50,7 +50,7 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
-def test_health_check():
+def test_health_check(client: TestClient):
     """Test health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
@@ -59,7 +59,7 @@ def test_health_check():
     assert "checks" in data
 
 
-def test_root_endpoint():
+def test_root_endpoint(client: TestClient):
     """Test root endpoint."""
     response = client.get("/")
     assert response.status_code == 200
@@ -67,20 +67,20 @@ def test_root_endpoint():
     assert "message" in data
 
 
-def test_ocr_endpoint_invalid_file():
+def test_ocr_endpoint_invalid_file(client: TestClient):
     """Test OCR endpoint with invalid file."""
     response = client.post("/ocr", files={"file": ("test.txt", b"not an image", "text/plain")})
     assert response.status_code == 400
 
 
-def test_embed_endpoint_validation():
+def test_embed_endpoint_validation(client: TestClient):
     """Test embed endpoint validation."""
     response = client.post("/embed", json={"text": "", "metadata": {"source": "test", "chunk_id": "1"}})
     # Should fail validation
     assert response.status_code in [400, 422]
 
 
-def test_retrieve_endpoint_validation():
+def test_retrieve_endpoint_validation(client: TestClient):
     """Test retrieve endpoint validation."""
     response = client.post("/retrieve", json={"query": "", "top_k": 5})
     # Should fail validation

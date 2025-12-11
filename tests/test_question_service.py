@@ -54,7 +54,7 @@ def test_create_question(question_service: QuestionService, sample_class: Class)
     assert question.class_id == sample_class.id
     assert question.question_text == "What is 2 + 2?"
     assert question.solution == "4"
-    assert question.metadata == {"source": "test"}
+    assert question.question_metadata == {"source": "test"}
 
 
 def test_create_question_invalid_class(question_service: QuestionService):
