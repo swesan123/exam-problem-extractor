@@ -12,14 +12,10 @@ from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
                                   validate_image_file)
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=OCRResponse, status_code=status.HTTP_200_OK)
 async def extract_text(request: Request, file: UploadFile = File(...)):
-    # Rate limiting is handled by the limiter attached to the router
-    if limiter and settings.rate_limit_enabled:
-        limiter.limit(f"{settings.rate_limit_per_minute}/minute")(extract_text)
     """
     Extract text from uploaded image using OCR.
 

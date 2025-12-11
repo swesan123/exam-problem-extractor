@@ -90,6 +90,11 @@ app.add_middleware(
 # Add request ID middleware
 app.add_middleware(RequestIDMiddleware)
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, app=app)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Exception handlers
 @app.exception_handler(ExamProblemExtractorException)
@@ -178,6 +183,19 @@ app.include_router(retrieve.router)
 app.include_router(generate.router)
 app.include_router(classes.router)
 app.include_router(questions.router)
+
+# Apply rate limiting to route endpoints
+# Get rate limit string based on settings
+if settings.rate_limit_enabled:
+    rate_limit_str = f"{settings.rate_limit_per_minute}/minute"
+else:
+    rate_limit_str = "1000/minute"
+
+# Apply rate limit decorators to endpoints
+ocr.extract_text = limiter.limit(rate_limit_str)(ocr.extract_text)
+generate.generate_question = limiter.limit(rate_limit_str)(generate.generate_question)
+embed.create_embedding = limiter.limit(rate_limit_str)(embed.create_embedding)
+retrieve.retrieve_similar = limiter.limit(rate_limit_str)(retrieve.retrieve_similar)
 
 
 # Logging middleware for requests
