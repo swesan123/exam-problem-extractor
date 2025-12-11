@@ -1,7 +1,6 @@
 """Reference content management API endpoints."""
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/api/reference-content", tags=["reference-content"])
 @router.get("/classes/{class_id}", status_code=status.HTTP_200_OK)
 async def list_class_reference_content(
     class_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # Keep for consistency with other endpoints
 ):
     """
     List all reference content for a specific class.
@@ -40,7 +39,9 @@ async def list_class_reference_content(
         }
 
     except Exception as e:
-        logger.error(f"Failed to list reference content for class {class_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to list reference content for class {class_id}: {e}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list reference content: {str(e)}",
@@ -50,7 +51,7 @@ async def list_class_reference_content(
 @router.delete("/{chunk_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_reference_content(
     chunk_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # Keep for consistency with other endpoints
 ):
     """
     Delete a reference content item by chunk_id.
@@ -77,9 +78,10 @@ async def delete_reference_content(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete reference content {chunk_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to delete reference content {chunk_id}: {e}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete reference content: {str(e)}",
         ) from e
-

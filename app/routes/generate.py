@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/generate", tags=["generation"])
 
 @router.post("", response_model=GenerateResponse, status_code=status.HTTP_200_OK)
 async def generate_question(
+    request: Request,
     ocr_text: Optional[str] = Form(None),
     image_file: Optional[UploadFile] = File(None),
     retrieved_context: Optional[str] = Form(None),  # JSON string
@@ -41,6 +42,7 @@ async def generate_question(
     If class_id is provided, the generated question will be automatically saved to that class.
 
     Args:
+        request: FastAPI Request object
         ocr_text: Pre-extracted OCR text (alternative to image_file)
         image_file: Image file for OCR extraction (alternative to ocr_text)
         retrieved_context: JSON string of pre-retrieved context (optional)
@@ -162,9 +164,18 @@ async def generate_question(
     except HTTPException:
         raise
     except Exception as e:
+        from app.config import settings
+        from app.utils.error_utils import get_safe_error_detail
+
+        logger.error(f"Question generation failed: {str(e)}", exc_info=True)
+        is_production = settings.environment.lower() == "production"
+        # Sanitize the full error message, not just the exception
+        full_error_msg = f"Question generation failed: {str(e)}"
+        from app.utils.error_utils import sanitize_error_message
+        safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Question generation failed: {str(e)}",
+            detail=safe_detail,
         ) from e
     finally:
         # Clean up temporary file

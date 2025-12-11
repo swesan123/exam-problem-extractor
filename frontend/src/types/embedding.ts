@@ -5,7 +5,7 @@ export interface EmbeddingMetadata {
   timestamp?: string
   exam_type?: string
   class_id?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface EmbeddingRequest {

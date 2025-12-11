@@ -177,17 +177,19 @@ class EmbeddingService:
         try:
             # Get all embeddings from collection
             all_data = self.collection.get(include=["documents", "metadatas"])
-            
+
             # Filter by class_id in metadata
             results = []
             for i, metadata in enumerate(all_data["metadatas"]):
                 if metadata and metadata.get("class_id") == class_id:
-                    results.append({
-                        "chunk_id": all_data["ids"][i],
-                        "text": all_data["documents"][i],
-                        "metadata": metadata,
-                    })
-            
+                    results.append(
+                        {
+                            "chunk_id": all_data["ids"][i],
+                            "text": all_data["documents"][i],
+                            "metadata": metadata,
+                        }
+                    )
+
             return results
         except Exception as e:
             raise Exception(f"Failed to list embeddings by class: {str(e)}") from e
@@ -207,7 +209,7 @@ class EmbeddingService:
             existing = self.collection.get(ids=[chunk_id])
             if not existing["ids"]:
                 return False
-            
+
             # Delete the chunk
             self.collection.delete(ids=[chunk_id])
             return True

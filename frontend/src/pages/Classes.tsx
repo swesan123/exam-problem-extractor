@@ -111,12 +111,20 @@ const Classes = () => {
                 </p>
               )}
               <div className="flex justify-between items-center mt-4">
-                <Link
-                  to={`/classes/${classItem.id}`}
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  View Details
-                </Link>
+                <div className="flex flex-col space-y-1">
+                  <Link
+                    to={`/classes/${classItem.id}`}
+                    className="text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    View Details
+                  </Link>
+                  <Link
+                    to={`/classes/${classItem.id}/questions`}
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    View Questions ({classItem.question_count || 0})
+                  </Link>
+                </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setEditingClass(classItem)}

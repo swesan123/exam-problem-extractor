@@ -15,22 +15,22 @@ const ClassDetails = () => {
   const [showAddModal, setShowAddModal] = useState(false)
   const [deletingChunkId, setDeletingChunkId] = useState<string | null>(null)
 
-  const loadReferenceContent = async () => {
-    if (!id) return
-
-    try {
-      setLoadingRefContent(true)
-      const response = await referenceContentService.getByClass(id)
-      setReferenceContent(response.items)
-    } catch (err) {
-      console.error('Failed to load reference content:', err)
-      setReferenceContent([])
-    } finally {
-      setLoadingRefContent(false)
-    }
-  }
-
   useEffect(() => {
+    const loadReferenceContent = async () => {
+      if (!id) return
+
+      try {
+        setLoadingRefContent(true)
+        const response = await referenceContentService.getByClass(id)
+        setReferenceContent(response.items)
+      } catch (err) {
+        // Silently handle error - reference content is optional
+        setReferenceContent([])
+      } finally {
+        setLoadingRefContent(false)
+      }
+    }
+
     const loadClass = async () => {
       if (!id) return
 
@@ -56,7 +56,11 @@ const ClassDetails = () => {
     try {
       setDeletingChunkId(chunkId)
       await referenceContentService.delete(chunkId)
-      await loadReferenceContent()
+      // Reload reference content
+      if (id) {
+        const response = await referenceContentService.getByClass(id)
+        setReferenceContent(response.items)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete reference content')
     } finally {
@@ -65,7 +69,17 @@ const ClassDetails = () => {
   }
 
   const handleAddSuccess = async () => {
-    await loadReferenceContent()
+    if (!id) return
+    try {
+      setLoadingRefContent(true)
+      const response = await referenceContentService.getByClass(id)
+      setReferenceContent(response.items)
+    } catch (err) {
+      // Silently handle error
+      setReferenceContent([])
+    } finally {
+      setLoadingRefContent(false)
+    }
   }
 
   if (loading) {

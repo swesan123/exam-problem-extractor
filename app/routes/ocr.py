@@ -110,10 +110,18 @@ async def extract_text(request: Request, file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
+        from app.config import settings
+        from app.utils.error_utils import get_safe_error_detail
+
         logger.error(f"OCR processing failed: {str(e)}", exc_info=True)
+        is_production = settings.environment.lower() == "production"
+        # Sanitize the full error message, not just the exception
+        full_error_msg = f"OCR processing failed: {str(e)}"
+        from app.utils.error_utils import sanitize_error_message
+        safe_detail = sanitize_error_message(full_error_msg, is_production)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OCR processing failed: {str(e)}",
+            detail=safe_detail,
         ) from e
     finally:
         # Clean up temporary file

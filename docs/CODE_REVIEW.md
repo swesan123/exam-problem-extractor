@@ -1,161 +1,319 @@
 # Code Review Report
-
-**Date:** 2025-01-27  
-**Reviewer:** Automated Code Review  
-**Scope:** Full codebase review
+**Date**: 2025-12-11  
+**Version**: 1.0.0  
+**Reviewer**: Automated Code Review
 
 ## Executive Summary
 
-The codebase demonstrates good structure and follows Python best practices. The application is well-organized with clear separation of concerns. All tests are passing (104 passed, 2 skipped). Code formatting has been standardized using black and isort.
-
-## Strengths
-
-### 1. Architecture & Structure
-- **Modular Design**: Clear separation between routes, services, models, and utilities
-- **Dependency Injection**: Proper use of FastAPI's dependency injection for database sessions
-- **Service Layer**: Business logic properly abstracted in service classes
-- **Error Handling**: Comprehensive exception handling with custom exception classes
-
-### 2. Code Quality
-- **Type Hints**: Consistent use of type hints throughout
-- **Documentation**: Good docstring coverage for functions and classes
-- **Pydantic Models**: Proper use of Pydantic for request/response validation
-- **Database Models**: Clean SQLAlchemy models with proper relationships
-
-### 3. Testing
-- **Test Coverage**: Comprehensive test suite with 104 passing tests
-- **Test Organization**: Tests organized by module with proper fixtures
-- **Mocking**: Appropriate use of mocks for external dependencies
-
-### 4. Security
-- **Environment Variables**: Sensitive data loaded from environment variables
-- **Input Validation**: Pydantic models validate all inputs
-- **File Upload Validation**: File type and size validation implemented
-- **Error Messages**: Generic error messages prevent information leakage
-
-## Areas for Improvement
-
-### 1. Security Enhancements
-
-#### CORS Configuration (High Priority)
-**Location:** `app/main.py:75`
-```python
-allow_origins=["*"],  # Configure appropriately for production
-```
-**Issue:** Wildcard CORS allows all origins, which is insecure for production.
-**Recommendation:** 
-- Use environment variable for allowed origins
-- Restrict to specific domains in production
-- Consider using `CORS_ORIGINS` setting
-
-#### API Key Validation (Medium Priority)
-**Location:** `app/main.py:238-240`
-**Issue:** Basic API key format validation only checks prefix and length.
-**Recommendation:** Consider adding more robust validation or actual API connectivity test (with timeout).
-
-### 2. Code Quality
-
-#### Deprecated Imports (Low Priority)
-**Location:** `app/db/database.py:27`
-```python
-from sqlalchemy.ext.declarative import declarative_base
-```
-**Issue:** Using deprecated `declarative_base()` function.
-**Recommendation:** Update to `sqlalchemy.orm.declarative_base()`.
-
-#### Pydantic Config (Low Priority)
-**Location:** `app/models/class_models.py:42`
-```python
-class Config:
-    from_attributes = True
-```
-**Issue:** Using class-based config (deprecated in Pydantic V2).
-**Recommendation:** Use `model_config = ConfigDict(from_attributes=True)`.
-
-#### HTTP Status Codes (Low Priority)
-**Location:** Multiple files
-**Issue:** Using deprecated status code constants.
-**Recommendation:** 
-- `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`
-- `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT`
-
-### 3. Error Handling
-
-#### Generic Exception Handling (Medium Priority)
-**Location:** `app/routes/generate.py:168-172`
-**Issue:** Generic exception handler may mask specific errors.
-**Recommendation:** Add more specific exception types and handle them appropriately.
-
-### 4. Performance
-
-#### Database Queries (Low Priority)
-**Location:** `app/services/class_service.py:165-169`
-**Issue:** Separate query for question count could be optimized.
-**Recommendation:** Consider using SQLAlchemy's `func.count()` with joins for better performance.
-
-#### Service Instantiation (Low Priority)
-**Location:** Multiple route files
-**Issue:** Services instantiated in route handlers rather than using dependency injection.
-**Recommendation:** Consider using FastAPI dependencies for service instantiation to improve testability.
-
-### 5. Code Duplication
-
-#### Metadata Mapping (Low Priority)
-**Location:** `app/api/questions.py` (multiple locations)
-**Issue:** Repeated code for mapping `question_metadata` to `metadata`.
-**Recommendation:** Extract to a helper function or use Pydantic's `model_serializer`.
-
-## Security Audit Findings
-
-### ✅ Secure Practices
-1. **No hardcoded secrets**: All sensitive data loaded from environment
-2. **Input validation**: Pydantic models validate all inputs
-3. **File upload limits**: File size and type validation implemented
-4. **SQL injection protection**: Using SQLAlchemy ORM prevents SQL injection
-5. **Error handling**: Generic error messages prevent information leakage
-6. **No dangerous functions**: No use of `eval()`, `exec()`, or `subprocess` with shell=True
-
-### ⚠️ Security Recommendations
-1. **CORS configuration**: Restrict origins in production
-2. **Rate limiting**: Consider adding rate limiting for API endpoints
-3. **Authentication**: Currently no authentication - consider adding if needed
-4. **File storage**: Temporary files cleaned up, but consider secure temp directory
-5. **Logging**: Ensure no sensitive data in logs (currently good)
-
-## Test Coverage
-
-- **Total Tests**: 104 passed, 2 skipped
-- **Coverage Areas**:
-  - File utilities
-  - OCR service and routes
-  - Embedding service
-  - Retrieval service
-  - Generation service
-  - Database models and services
-  - API endpoints
-  - Export functionality
-
-## Recommendations Priority
-
-### High Priority
-1. Fix CORS configuration for production
-2. Add rate limiting for API endpoints
-3. Consider authentication/authorization if needed
-
-### Medium Priority
-1. Update deprecated SQLAlchemy imports
-2. Update Pydantic config to use ConfigDict
-3. Improve error handling specificity
-
-### Low Priority
-1. Update deprecated HTTP status codes
-2. Optimize database queries
-3. Extract code duplication
-4. Use dependency injection for services
-
-## Conclusion
-
-The codebase is well-structured and follows best practices. The main areas for improvement are security hardening (CORS, rate limiting) and updating deprecated dependencies. All critical functionality is working correctly with comprehensive test coverage.
+This code review evaluates the Exam Problem Extractor codebase for code quality, maintainability, correctness, and adherence to best practices. The codebase demonstrates strong architecture and good practices overall.
 
 **Overall Grade: A-**
 
+## 1. Architecture & Structure
+
+### Strengths
+- ✅ **Excellent**: Clear separation of concerns (routes, services, models, utils)
+- ✅ **Excellent**: Modular design with well-defined interfaces
+- ✅ **Good**: Consistent naming conventions
+- ✅ **Good**: Proper use of dependency injection
+- ✅ **Good**: Type hints throughout
+
+### Areas for Improvement
+- ⚠️ **Minor**: Some services instantiate dependencies internally (could use DI more consistently)
+- ⚠️ **Minor**: Some circular dependency risks (manageable but worth monitoring)
+
+## 2. Code Quality
+
+### Strengths
+- ✅ **Excellent**: Comprehensive type hints
+- ✅ **Excellent**: Clear docstrings for all public functions
+- ✅ **Good**: Consistent error handling patterns
+- ✅ **Good**: Proper use of context managers and cleanup
+- ✅ **Good**: DRY principles followed
+
+### Code Examples
+
+**Good Pattern** (Error Handling):
+```python
+# app/routes/ocr.py
+try:
+    # Processing
+except HTTPException:
+    raise
+except Exception as e:
+    logger.error(f"OCR processing failed: {str(e)}", exc_info=True)
+    raise HTTPException(...) from e
+finally:
+    cleanup_temp_file(temp_path)
+```
+
+**Good Pattern** (Type Safety):
+```python
+# app/models/ocr_models.py
+class OCRResponse(BaseModel):
+    text: str = Field(..., description="Extracted text content")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, ...)
+```
+
+### Areas for Improvement
+- ⚠️ **Minor**: Some functions are too long (e.g., `generate_question` in `app/routes/generate.py`)
+- ⚠️ **Minor**: Some magic numbers (e.g., `top_k=5` hardcoded)
+- ⚠️ **Minor**: Some code duplication in error handling
+
+## 3. Error Handling
+
+### Strengths
+- ✅ **Excellent**: Custom exception hierarchy
+- ✅ **Excellent**: Global exception handlers
+- ✅ **Good**: Proper HTTP status codes
+- ✅ **Good**: Request ID tracking
+- ✅ **Good**: Structured error responses
+
+### Issues Found
+
+**Issue 1**: Error messages may expose internal details
+```python
+# app/routes/ocr.py:116
+detail=f"OCR processing failed: {str(e)}"  # Exposes full exception
+```
+
+**Recommendation**: Sanitize error messages in production:
+```python
+detail="OCR processing failed. Please check the file and try again."
+# Log full error internally
+logger.error(f"OCR failed: {str(e)}", exc_info=True)
+```
+
+**Issue 2**: Some error handling could be more specific
+```python
+# app/routes/generate.py:164
+except Exception as e:
+    raise HTTPException(...)  # Too generic
+```
+
+**Recommendation**: Catch specific exceptions:
+```python
+except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+except Exception as e:
+    logger.error(...)
+    raise HTTPException(status_code=500, detail="Internal error")
+```
+
+## 4. Security Considerations
+
+### Strengths
+- ✅ **Good**: Input validation via Pydantic
+- ✅ **Good**: File type and size validation
+- ✅ **Good**: SQL injection prevention (ORM)
+- ✅ **Good**: No dangerous code execution patterns
+- ✅ **Good**: Secrets in environment variables
+
+### Issues
+- ⚠️ **Critical**: No authentication/authorization (see Security Audit)
+- ⚠️ **Medium**: Error messages may leak information
+- ⚠️ **Low**: No file content validation (magic bytes)
+
+## 5. Performance
+
+### Strengths
+- ✅ **Good**: Async/await used appropriately
+- ✅ **Good**: Database connection pooling
+- ✅ **Good**: Efficient file handling
+- ✅ **Good**: Retry logic with exponential backoff
+
+### Areas for Improvement
+- ⚠️ **Medium**: PDF processing is synchronous (could be async)
+- ⚠️ **Low**: No caching for frequent queries
+- ⚠️ **Low**: No connection pooling for vector DB
+
+### Recommendations
+- Consider: Async PDF processing for large files
+- Consider: Caching for retrieval results
+- Consider: Connection pooling for ChromaDB
+
+## 6. Testing
+
+### Current State
+- ✅ **Good**: Comprehensive test coverage
+- ✅ **Good**: Unit tests for services
+- ✅ **Good**: Integration tests for routes
+- ✅ **Good**: Test fixtures and mocks
+
+### Areas for Improvement
+- ⚠️ **Medium**: Some edge cases not covered
+- ⚠️ **Low**: No performance/load tests
+- ⚠️ **Low**: No security-focused tests
+
+### Recommendations
+- Add: Edge case tests (empty inputs, very large inputs)
+- Add: Security tests (injection attempts, file upload attacks)
+- Add: Performance tests (load testing)
+
+## 7. Documentation
+
+### Strengths
+- ✅ **Excellent**: Comprehensive docstrings
+- ✅ **Good**: Type hints serve as documentation
+- ✅ **Good**: README with setup instructions
+- ✅ **Good**: API documentation via FastAPI
+
+### Areas for Improvement
+- ⚠️ **Minor**: Some complex functions need more detailed docstrings
+- ⚠️ **Minor**: Architecture documentation could be more detailed
+- ⚠️ **Minor**: API usage examples in README
+
+## 8. API Design
+
+### Strengths
+- ✅ **Excellent**: RESTful design
+- ✅ **Excellent**: Consistent response formats
+- ✅ **Good**: Proper HTTP status codes
+- ✅ **Good**: Request/response validation
+- ✅ **Good**: OpenAPI documentation
+
+### Areas for Improvement
+- ⚠️ **Medium**: No API versioning
+- ⚠️ **Low**: Some endpoints could be more RESTful
+- ⚠️ **Low**: No pagination metadata in some responses
+
+## 9. Database Design
+
+### Strengths
+- ✅ **Good**: Proper ORM usage
+- ✅ **Good**: Foreign key relationships
+- ✅ **Good**: Indexes on frequently queried fields
+- ✅ **Good**: Cascade deletes configured
+
+### Areas for Improvement
+- ⚠️ **Low**: No database migrations (Alembic)
+- ⚠️ **Low**: No database backup strategy documented
+
+## 10. Configuration Management
+
+### Strengths
+- ✅ **Excellent**: Type-safe configuration (Pydantic)
+- ✅ **Excellent**: Environment variable validation
+- ✅ **Good**: Sensible defaults
+- ✅ **Good**: Configuration documentation
+
+### Areas for Improvement
+- ⚠️ **Minor**: Some hardcoded values (e.g., `top_k=5`)
+- ⚠️ **Minor**: Configuration could be more granular
+
+## 11. Code Consistency
+
+### Strengths
+- ✅ **Good**: Consistent naming (snake_case)
+- ✅ **Good**: Consistent error handling
+- ✅ **Good**: Consistent logging patterns
+- ✅ **Good**: Code formatting (black, isort)
+
+### Minor Issues
+- ⚠️ Some inconsistencies in error message formatting
+- ⚠️ Some inconsistencies in logging levels
+
+## 12. Specific Code Issues
+
+### Issue 1: Hardcoded Values
+```python
+# app/routes/generate.py:95
+retrieved_chunks = retrieval_service.retrieve(ocr_text, top_k=5)  # Hardcoded
+```
+
+**Recommendation**: Make configurable:
+```python
+top_k = settings.default_retrieve_k or 5
+retrieved_chunks = retrieval_service.retrieve(ocr_text, top_k=top_k)
+```
+
+### Issue 2: Long Function
+```python
+# app/routes/generate.py:26-172
+async def generate_question(...):  # 146 lines - too long
+```
+
+**Recommendation**: Extract helper functions:
+```python
+async def _perform_ocr(...) -> str:
+    ...
+
+async def _perform_retrieval(...) -> List[str]:
+    ...
+
+async def _save_question(...) -> Optional[str]:
+    ...
+```
+
+### Issue 3: Error Message Exposure
+```python
+# Multiple locations
+detail=f"Processing failed: {str(e)}"  # Exposes internal errors
+```
+
+**Recommendation**: Use environment-based error detail levels:
+```python
+if settings.log_level == "DEBUG":
+    detail = f"Processing failed: {str(e)}"
+else:
+    detail = "Processing failed. Please try again."
+```
+
+## 13. Best Practices Compliance
+
+### Followed
+- ✅ Type hints
+- ✅ Docstrings
+- ✅ Error handling
+- ✅ Logging
+- ✅ Code formatting
+- ✅ Dependency injection (mostly)
+- ✅ Separation of concerns
+
+### Partially Followed
+- ⚠️ Dependency injection (some services create dependencies)
+- ⚠️ Error message sanitization (needs improvement)
+- ⚠️ Configuration management (some hardcoded values)
+
+### Not Followed
+- ❌ Authentication/authorization
+- ❌ API versioning
+- ❌ Database migrations
+
+## 14. Recommendations Priority
+
+### High Priority
+1. Implement authentication/authorization
+2. Sanitize error messages in production
+3. Extract long functions into smaller helpers
+4. Make hardcoded values configurable
+
+### Medium Priority
+1. Add file content validation (magic bytes)
+2. Implement API versioning
+3. Add database migrations (Alembic)
+4. Improve error handling specificity
+
+### Low Priority
+1. Add caching for frequent queries
+2. Add performance tests
+3. Improve documentation examples
+4. Add connection pooling for vector DB
+
+## 15. Positive Highlights
+
+1. **Excellent Architecture**: Clear separation of concerns, modular design
+2. **Type Safety**: Comprehensive type hints throughout
+3. **Error Handling**: Well-structured exception hierarchy
+4. **Testing**: Good test coverage
+5. **Documentation**: Clear docstrings and API docs
+6. **Security Basics**: Input validation, SQL injection prevention
+7. **Code Quality**: Clean, readable, maintainable code
+
+## Conclusion
+
+The codebase demonstrates strong engineering practices with excellent architecture, type safety, and error handling. The main areas for improvement are authentication/authorization (critical), error message sanitization, and some code organization improvements. Overall, this is a well-written codebase that follows best practices.
+
+**Grade: A-**
+
+The code is production-ready after addressing the critical security issues (authentication/authorization) and high-priority code improvements.

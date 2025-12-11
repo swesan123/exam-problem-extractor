@@ -1,219 +1,252 @@
 # Security Audit Report
-
-**Date:** 2025-01-27  
-**Auditor:** Automated Security Audit  
-**Scope:** Full application security review
+**Date**: 2025-12-11  
+**Version**: 1.0.0  
+**Auditor**: Automated Security Audit
 
 ## Executive Summary
 
-The application demonstrates good security practices with proper input validation, secure file handling, and no hardcoded secrets. However, there are some areas that need attention for production deployment, particularly around CORS configuration and potential rate limiting.
+This security audit evaluates the Exam Problem Extractor application for vulnerabilities, unsafe patterns, dependency issues, and improper handling of secrets or user input. The application demonstrates good security practices overall, with some areas for improvement.
 
-## Security Assessment
+**Overall Grade: B+**
 
-### ✅ Secure Practices Implemented
+## 1. Dependency Vulnerability Assessment
 
-#### 1. Secret Management
-- **Status:** ✅ Secure
-- **Details:** 
-  - All API keys loaded from environment variables
-  - No hardcoded credentials in code
-  - `.env` file properly excluded from version control
-  - `.env.example` provides template without real values
+### Current Dependencies
+- **FastAPI**: 0.124.0 ✅ (Latest stable)
+- **OpenAI**: 2.9.0 ✅ (Recent version)
+- **ChromaDB**: 1.3.5 ✅ (Recent version)
+- **Pydantic**: 2.12.5 ✅ (Latest stable)
+- **SQLAlchemy**: 2.0.0+ ✅ (Modern version)
 
-#### 2. Input Validation
-- **Status:** ✅ Secure
-- **Details:**
-  - Pydantic models validate all request inputs
-  - File type validation (images and PDFs)
-  - File size limits enforced (10MB max)
-  - Query parameter validation with constraints
+### Findings
+- ✅ All major dependencies are up-to-date
+- ✅ No known critical vulnerabilities in current versions
+- ⚠️ **Recommendation**: Implement automated dependency scanning (e.g., `safety`, `pip-audit`)
 
-#### 3. SQL Injection Protection
-- **Status:** ✅ Secure
-- **Details:**
-  - Using SQLAlchemy ORM prevents SQL injection
-  - Parameterized queries used throughout
-  - No raw SQL queries with string concatenation
+## 2. Secret Management
 
-#### 4. File Upload Security
-- **Status:** ✅ Secure
-- **Details:**
-  - File type validation (MIME type checking)
-  - File size limits enforced
-  - Temporary files properly cleaned up
-  - PDF processing uses secure library (PyMuPDF)
+### API Key Handling
+- ✅ **Good**: API keys stored in environment variables only
+- ✅ **Good**: Keys loaded via `pydantic-settings` (type-safe)
+- ✅ **Good**: No hardcoded secrets in codebase
+- ✅ **Good**: `.env` file excluded from git (`.gitignore`)
+- ✅ **Good**: No API keys logged in error messages or logs
+- ⚠️ **Minor**: Health check validates key format but doesn't verify actual connectivity
 
-#### 5. Error Handling
-- **Status:** ✅ Secure
-- **Details:**
-  - Generic error messages prevent information leakage
-  - Stack traces not exposed to clients
-  - Proper exception handling with custom exceptions
+### Recommendations
+- ✅ Already implemented: Environment variable validation on startup
+- ⚠️ Consider: Key rotation mechanism documentation
+- ⚠️ Consider: Secrets management service for production (AWS Secrets Manager, HashiCorp Vault)
 
-#### 6. Dependency Security
-- **Status:** ⚠️ Needs Review
-- **Details:**
-  - Some outdated packages detected
-  - Regular dependency updates recommended
-  - No known critical vulnerabilities in current versions
+## 3. File Upload Security
 
-### ⚠️ Security Concerns
+### Current Implementation
+- ✅ **Good**: MIME type validation (not just file extension)
+- ✅ **Good**: File size limits enforced (10MB max)
+- ✅ **Good**: Temporary files cleaned up in `finally` blocks
+- ✅ **Good**: PDF processing uses PyMuPDF (well-maintained library)
+- ✅ **Good**: File content validation before processing
 
-#### 1. CORS Configuration (HIGH PRIORITY)
-- **Location:** `app/main.py:75`
-- **Issue:** Wildcard CORS (`allow_origins=["*"]`) allows all origins
-- **Risk:** Cross-origin attacks, CSRF vulnerabilities
-- **Recommendation:**
-  ```python
-  # Use environment variable
-  CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-  app.add_middleware(
-      CORSMiddleware,
-      allow_origins=CORS_ORIGINS,
-      allow_credentials=True,
-      allow_methods=["GET", "POST", "PUT", "DELETE"],
-      allow_headers=["*"],
-  )
-  ```
+### Potential Issues
+- ⚠️ **Medium**: No file content scanning for malicious PDFs/images
+- ⚠️ **Low**: PDF processing could be resource-intensive for large files
+- ✅ **Good**: File paths are sanitized (using `pathlib`)
 
-#### 2. Rate Limiting (MEDIUM PRIORITY)
-- **Issue:** No rate limiting implemented
-- **Risk:** API abuse, DoS attacks, excessive API costs
-- **Recommendation:**
-  - Implement rate limiting using `slowapi` or similar
-  - Set limits per endpoint (e.g., 100 requests/minute for OCR)
-  - Consider different limits for different endpoints
+### Recommendations
+- ⚠️ Consider: Add file content validation (magic bytes check)
+- ⚠️ Consider: Add virus scanning for production environments
+- ⚠️ Consider: Add page limit for PDFs (e.g., max 50 pages)
 
-#### 3. Authentication/Authorization (MEDIUM PRIORITY)
-- **Issue:** No authentication mechanism
-- **Risk:** Unauthorized access to API
-- **Recommendation:**
-  - Add API key authentication or JWT tokens
-  - Implement role-based access control if needed
-  - Protect sensitive endpoints
+## 4. Input Validation & Sanitization
 
-#### 4. API Key Validation (LOW PRIORITY)
-- **Location:** `app/main.py:238-240`
-- **Issue:** Basic format validation only
-- **Risk:** Invalid keys may cause runtime errors
-- **Recommendation:**
-  - Add actual API connectivity test on startup (with timeout)
-  - Cache validation result to avoid repeated checks
+### Text Input
+- ✅ **Good**: Pydantic models validate all API inputs
+- ✅ **Good**: Type checking and field validation
+- ✅ **Good**: SQL injection prevented (SQLAlchemy ORM)
+- ⚠️ **Low**: User-provided text in prompts (potential prompt injection)
 
-#### 5. File Storage Security (LOW PRIORITY)
-- **Issue:** Temporary files stored in system temp directory
-- **Risk:** Potential file system attacks
-- **Recommendation:**
-  - Use secure temp directory with proper permissions
-  - Consider using object storage (S3) for production
+### File Input
+- ✅ **Good**: File type validation
+- ✅ **Good**: File size validation
+- ⚠️ **Medium**: No content-based validation (magic bytes)
 
-### 🔍 Code Security Analysis
+### Recommendations
+- ⚠️ Consider: Add prompt injection detection/mitigation
+- ⚠️ Consider: Add content-based file validation (magic bytes)
 
-#### Dangerous Functions Check
-- ✅ No use of `eval()`
-- ✅ No use of `exec()`
-- ✅ No use of `subprocess` with `shell=True`
-- ✅ No use of `__import__` with user input
-- ✅ No use of `compile()` with user input
+## 5. Error Handling & Information Disclosure
 
-#### Input Sanitization
-- ✅ File uploads validated for type and size
-- ✅ Text inputs validated through Pydantic
-- ✅ Query parameters validated with constraints
-- ✅ JSON inputs validated through Pydantic models
+### Current Implementation
+- ✅ **Good**: Custom exception classes
+- ✅ **Good**: Structured error responses
+- ✅ **Good**: Request ID tracking for debugging
+- ⚠️ **Medium**: Some error messages may expose internal details
 
-#### Output Encoding
-- ✅ FastAPI handles response encoding automatically
-- ✅ No direct string concatenation in SQL queries
-- ✅ Proper use of parameterized queries
+### Issues Found
+```python
+# app/routes/ocr.py:116
+detail=f"OCR processing failed: {str(e)}"  # May expose internal errors
+```
 
-### 📋 Security Checklist
+### Recommendations
+- ⚠️ **High Priority**: Sanitize error messages in production
+- ✅ Already implemented: Request IDs for tracking
+- ⚠️ Consider: Different error detail levels for dev vs production
 
-#### Authentication & Authorization
-- [ ] API key authentication
-- [ ] JWT token support
-- [ ] Role-based access control
-- [ ] Session management
+## 6. Authentication & Authorization
 
-#### Input Validation
-- [x] Request body validation (Pydantic)
-- [x] Query parameter validation
-- [x] File upload validation
-- [x] Path parameter validation
+### Current State
+- ⚠️ **High Priority**: No authentication implemented
+- ⚠️ **High Priority**: No authorization checks
+- ⚠️ **High Priority**: All endpoints are publicly accessible
 
-#### Output Security
-- [x] Generic error messages
-- [x] No sensitive data in responses
-- [x] Proper HTTP status codes
-- [x] Content-Type headers set correctly
+### Recommendations
+- 🔴 **Critical**: Implement authentication (JWT, OAuth2, API keys)
+- 🔴 **Critical**: Implement authorization (role-based access control)
+- ⚠️ Consider: API key authentication for programmatic access
 
-#### Data Protection
-- [x] Environment variables for secrets
-- [x] No hardcoded credentials
-- [x] Database connection security
-- [ ] Encryption at rest (if needed)
+## 7. Rate Limiting
 
-#### Network Security
-- [ ] HTTPS enforcement (production)
-- [ ] CORS properly configured
-- [ ] Rate limiting
-- [ ] Request size limits
+### Current Implementation
+- ✅ **Good**: Rate limiting implemented via `slowapi`
+- ✅ **Good**: Configurable rate limits (default: 60/min)
+- ✅ **Good**: Per-IP rate limiting
+- ✅ **Good**: Can be disabled via configuration
 
-#### Logging & Monitoring
-- [x] Structured logging
-- [x] Request ID tracking
-- [ ] Security event logging
-- [ ] Audit trail
+### Recommendations
+- ✅ Already implemented: Rate limiting on all API endpoints
+- ⚠️ Consider: Different rate limits for different endpoints
+- ⚠️ Consider: Rate limit headers in responses
 
-## Recommendations
+## 8. CORS Configuration
 
-### Immediate Actions (Before Production)
-1. **Fix CORS Configuration**
-   - Remove wildcard origins
-   - Use environment variable for allowed origins
-   - Test with actual frontend domain
+### Current Implementation
+- ✅ **Good**: CORS is configurable via environment variables
+- ✅ **Good**: Defaults to localhost in debug mode
+- ⚠️ **Medium**: Falls back to `["*"]` if no origins specified (production risk)
 
-2. **Add Rate Limiting**
-   - Implement per-endpoint rate limits
-   - Consider different limits for different operations
-   - Monitor and adjust based on usage
+### Issues Found
+```python
+# app/main.py:87
+allow_origins=cors_origins if cors_origins else ["*"]  # Wildcard in production
+```
 
-3. **Add Authentication**
-   - Implement API key or JWT authentication
-   - Protect sensitive endpoints
-   - Document authentication requirements
+### Recommendations
+- ⚠️ **High Priority**: Never use wildcard CORS in production
+- ⚠️ **High Priority**: Require explicit CORS origins in production
+- ✅ Already implemented: Configurable via environment
 
-### Short-term Improvements
-1. **Enhanced API Key Validation**
-   - Add connectivity test on startup
-   - Cache validation results
-   - Better error messages
+## 9. Database Security
 
-2. **Security Headers**
-   - Add security headers (X-Content-Type-Options, X-Frame-Options, etc.)
-   - Implement CSP if serving frontend
+### Current Implementation
+- ✅ **Good**: SQLAlchemy ORM prevents SQL injection
+- ✅ **Good**: Parameterized queries (ORM handles this)
+- ✅ **Good**: Database path is configurable
+- ⚠️ **Low**: SQLite file permissions not explicitly set
 
-3. **Dependency Updates**
-   - Regularly update dependencies
-   - Monitor for security advisories
-   - Use tools like `safety` or `pip-audit`
+### Recommendations
+- ⚠️ Consider: Set explicit file permissions on SQLite database
+- ⚠️ Consider: Database encryption for sensitive data
+- ✅ Already implemented: ORM prevents SQL injection
 
-### Long-term Enhancements
-1. **Security Monitoring**
-   - Implement security event logging
-   - Set up alerts for suspicious activity
-   - Regular security audits
+## 10. Logging & Monitoring
 
-2. **Penetration Testing**
-   - Conduct regular penetration tests
-   - Fix identified vulnerabilities
-   - Document security procedures
+### Current Implementation
+- ✅ **Good**: Structured logging with request IDs
+- ✅ **Good**: No secrets logged
+- ✅ **Good**: Error tracebacks logged for debugging
+- ⚠️ **Low**: No log rotation configured
+
+### Recommendations
+- ⚠️ Consider: Log rotation for production
+- ⚠️ Consider: Centralized logging (ELK, CloudWatch)
+- ✅ Already implemented: Request ID tracking
+
+## 11. API Security
+
+### Endpoints
+- ✅ **Good**: Input validation via Pydantic
+- ✅ **Good**: Error handling with proper HTTP status codes
+- ✅ **Good**: Request/response logging
+- ⚠️ **Medium**: No API versioning
+- ⚠️ **Medium**: No request signing/verification
+
+### Recommendations
+- ⚠️ Consider: API versioning strategy
+- ⚠️ Consider: Request signing for sensitive operations
+- ✅ Already implemented: Input validation
+
+## 12. Data Privacy
+
+### Current Implementation
+- ✅ **Good**: Temporary files cleaned up
+- ✅ **Good**: No PII in vector store metadata (user-controlled)
+- ⚠️ **Low**: No data retention policy
+- ⚠️ **Low**: No data encryption at rest
+
+### Recommendations
+- ⚠️ Consider: Data retention policies
+- ⚠️ Consider: Encryption at rest for sensitive data
+- ✅ Already implemented: Temp file cleanup
+
+## 13. Code Execution Safety
+
+### Analysis
+- ✅ **Good**: No `eval()`, `exec()`, or `__import__()` usage
+- ✅ **Good**: No `subprocess` with `shell=True`
+- ✅ **Good**: No dangerous code execution patterns
+- ✅ **Good**: Safe file operations using `pathlib`
+
+## 14. Summary of Findings
+
+### Critical Issues (Must Fix)
+1. 🔴 **No Authentication**: All endpoints are publicly accessible
+2. 🔴 **No Authorization**: No access control implemented
+3. ⚠️ **CORS Wildcard**: Falls back to `["*"]` in production
+
+### High Priority Issues
+1. ⚠️ **Error Message Sanitization**: May expose internal details
+2. ⚠️ **File Content Validation**: No magic bytes checking
+3. ⚠️ **Production CORS**: Should require explicit origins
+
+### Medium Priority Issues
+1. ⚠️ **Prompt Injection**: User input in AI prompts
+2. ⚠️ **PDF Page Limits**: No limit on PDF pages
+3. ⚠️ **API Versioning**: No versioning strategy
+
+### Low Priority Issues
+1. ⚠️ **Dependency Scanning**: No automated scanning
+2. ⚠️ **Log Rotation**: Not configured
+3. ⚠️ **Database Permissions**: Not explicitly set
+
+## 15. Recommendations Priority
+
+### Immediate Actions
+1. Implement authentication (JWT or API keys)
+2. Implement authorization (RBAC)
+3. Fix CORS wildcard fallback
+4. Sanitize error messages in production
+
+### Short-term Actions
+1. Add file content validation (magic bytes)
+2. Add PDF page limits
+3. Implement API versioning
+4. Add dependency scanning to CI/CD
+
+### Long-term Actions
+1. Implement secrets management service
+2. Add centralized logging
+3. Add data encryption at rest
+4. Implement data retention policies
+
+## 16. Compliance Notes
+
+- ✅ **GDPR**: User data is user-controlled (no automatic PII collection)
+- ⚠️ **SOC 2**: Missing authentication/authorization
+- ⚠️ **HIPAA**: Not suitable for healthcare data (no encryption at rest)
 
 ## Conclusion
 
-The application has a solid security foundation with proper input validation, secure file handling, and no hardcoded secrets. The main areas requiring attention are CORS configuration, rate limiting, and authentication before production deployment.
+The application demonstrates good security practices in many areas, particularly in input validation, secret management, and code safety. However, the lack of authentication and authorization is a critical gap that must be addressed before production deployment. The codebase is well-structured and follows security best practices where implemented.
 
-**Security Grade: B+**
-
-**Recommendation:** Address high-priority items (CORS, rate limiting) before production deployment. Medium-priority items (authentication) should be implemented based on deployment requirements.
-
+**Next Steps**: Address critical issues, then proceed with high-priority items.
