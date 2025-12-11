@@ -3,18 +3,23 @@
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+from app.config import settings
 from app.models.ocr_models import OCRResponse
 from app.services.ocr_service import OCRService
 from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
                                   validate_image_file)
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=OCRResponse, status_code=status.HTTP_200_OK)
-async def extract_text(file: UploadFile = File(...)):
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
+async def extract_text(request: Request, file: UploadFile = File(...)):
     """
     Extract text from uploaded image using OCR.
 

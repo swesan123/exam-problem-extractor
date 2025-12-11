@@ -5,10 +5,13 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import (APIRouter, Depends, File, Form, HTTPException, UploadFile,
-                     status)
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
+                     UploadFile, status)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.database import get_db
 from app.models.generation_models import GenerateResponse
 from app.models.question_models import QuestionCreate
@@ -18,15 +21,18 @@ from app.services.ocr_service import OCRService
 from app.services.question_service import QuestionService
 from app.services.retrieval_service import RetrievalService
 from app.utils.file_utils import (cleanup_temp_file, save_temp_file,
-                                  validate_image_file)
+                                   validate_image_file)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generation"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=GenerateResponse, status_code=status.HTTP_200_OK)
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "1000/minute")
 async def generate_question(
+    request: Request,
     ocr_text: Optional[str] = Form(None),
     image_file: Optional[UploadFile] = File(None),
     retrieved_context: Optional[str] = Form(None),  # JSON string

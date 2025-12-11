@@ -16,6 +16,9 @@ pydantic-settings>=2.0.0
 # Utilities
 python-dotenv>=1.0.0
 
+# Rate Limiting
+slowapi>=0.1.9
+
 # Database
 sqlalchemy>=2.0.0
 
