@@ -36,6 +36,40 @@ const ReferenceContent = () => {
     loadClasses()
   }, [])
 
+  // Handle paste from clipboard
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      const imageFiles: File[] = []
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile()
+          if (blob) {
+            // Create a File object from the blob with a name
+            const file = new File([blob], `pasted-image-${Date.now()}.png`, {
+              type: blob.type,
+            })
+            imageFiles.push(file)
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault()
+        handleFiles(imageFiles)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => {
+      window.removeEventListener('paste', handlePaste)
+    }
+  }, [handleFiles])
+
   const isValidFile = (file: File): boolean => {
     const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
     const validPdfType = 'application/pdf'
@@ -115,8 +149,17 @@ const ReferenceContent = () => {
       let extractedText = ''
 
       if (fileWithStatus.file.type === 'application/pdf') {
-        // For PDFs, show error message (backend doesn't support PDFs directly)
-        throw new Error('PDF support coming soon. Please convert PDF pages to images first.')
+        // For PDFs, use OCR service (backend now supports PDFs)
+        setFiles((prev) =>
+          prev.map((f, i) => (i === index ? { ...f, progress: 50 } : f))
+        )
+
+        const ocrResponse = await ocrService.extractText(fileWithStatus.file)
+        extractedText = ocrResponse.text
+
+        if (!extractedText || extractedText.trim().length === 0) {
+          throw new Error('No text extracted from PDF')
+        }
       } else {
         // For images, use OCR
         setFiles((prev) =>
@@ -237,8 +280,8 @@ const ReferenceContent = () => {
 
       <div className="bg-white rounded-lg shadow p-6 max-w-4xl">
         <p className="text-gray-600 mb-6">
-          Drag and drop images or PDFs, or click to select files. The OCR functionality will parse
-          and store them as reference material for question generation.
+          Drag and drop images or PDFs, click to select files, or paste images from your clipboard.
+          The OCR functionality will parse and store them as reference material for question generation.
         </p>
 
         <div className="mb-6">
@@ -332,7 +375,8 @@ const ReferenceContent = () => {
               />
             </svg>
             <p className="text-gray-600 mb-2">
-              <span className="text-blue-600 font-medium">Click to upload</span> or drag and drop
+              <span className="text-blue-600 font-medium">Click to upload</span>, drag and drop, or{' '}
+              <span className="text-blue-600 font-medium">paste from clipboard</span>
             </p>
             <p className="text-sm text-gray-500">
               Images (PNG, JPG, JPEG) or PDFs (max 10MB each)
@@ -457,8 +501,9 @@ const ReferenceContent = () => {
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-blue-900 mb-2">How it works:</h3>
         <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-          <li>Upload images or PDFs using drag and drop or file selection</li>
-          <li>OCR extracts text from each image automatically</li>
+          <li>Upload images or PDFs using drag and drop, file selection, or paste from clipboard</li>
+          <li>OCR extracts text from each image/PDF automatically</li>
+          <li>PDFs are processed page-by-page and all text is extracted</li>
           <li>Extracted text is embedded into the vector database</li>
           <li>When generating questions, similar content is retrieved automatically</li>
           <li>This helps generate questions in the same style and format</li>
