@@ -23,6 +23,8 @@ const ClassQuestions = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
   const [downloadingSet, setDownloadingSet] = useState<string | null>(null)
+  const [groupByTopic, setGroupByTopic] = useState(false)
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const loadData = async () => {
@@ -221,14 +223,23 @@ const ClassQuestions = () => {
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-4">
         <input
           type="text"
           placeholder="Search questions..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={groupByTopic}
+            onChange={(e) => setGroupByTopic(e.target.checked)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          Group by topic
+        </label>
       </div>
 
       <div className="mb-4 text-sm text-gray-600">
@@ -255,36 +266,54 @@ const ClassQuestions = () => {
         <div className="space-y-4">
           {(() => {
             // Group max coverage exams by exam_set_id
-            const groupedQuestions: { [key: string]: Question[] } = {}
-            const ungroupedQuestions: Question[] = []
+            const maxCoverageGroups: { [key: string]: Question[] } = {}
+            const regularQuestions: Question[] = []
             
             filteredQuestions.forEach((question) => {
               const isMaxCoverage = question.metadata?.is_mock_exam && question.metadata?.exam_type === 'max_coverage'
               const examSetId = question.metadata?.exam_set_id as string | undefined
               
               if (isMaxCoverage && examSetId) {
-                if (!groupedQuestions[examSetId]) {
-                  groupedQuestions[examSetId] = []
+                if (!maxCoverageGroups[examSetId]) {
+                  maxCoverageGroups[examSetId] = []
                 }
-                groupedQuestions[examSetId].push(question)
+                maxCoverageGroups[examSetId].push(question)
               } else {
-                ungroupedQuestions.push(question)
+                regularQuestions.push(question)
               }
             })
             
             // Sort grouped exams by exam_index
-            Object.keys(groupedQuestions).forEach(key => {
-              groupedQuestions[key].sort((a, b) => {
+            Object.keys(maxCoverageGroups).forEach(key => {
+              maxCoverageGroups[key].sort((a, b) => {
                 const aIndex = (a.metadata?.exam_index as number | undefined) || 0
                 const bIndex = (b.metadata?.exam_index as number | undefined) || 0
                 return aIndex - bIndex
               })
             })
+
+            // Group regular questions by topic if enabled
+            const topicGroups: { [key: string]: Question[] } = {}
+            const untaggedQuestions: Question[] = []
+            
+            if (groupByTopic) {
+              regularQuestions.forEach((question) => {
+                const topic = question.topic || 'Untagged'
+                if (topic === 'Untagged') {
+                  untaggedQuestions.push(question)
+                } else {
+                  if (!topicGroups[topic]) {
+                    topicGroups[topic] = []
+                  }
+                  topicGroups[topic].push(question)
+                }
+              })
+            }
             
             return (
               <>
                 {/* Render grouped max coverage exams */}
-                {Object.entries(groupedQuestions).map(([examSetId, exams]) => {
+                {Object.entries(maxCoverageGroups).map(([examSetId, exams]) => {
                   const firstExam = exams[0]
                   const coverageMetric = firstExam.metadata?.coverage_metric || firstExam.metadata?.final_coverage
                   const examType = firstExam.metadata?.exam_type
@@ -329,8 +358,56 @@ const ClassQuestions = () => {
                     </div>
                   )
                 })}
-                {/* Render ungrouped questions */}
-                {ungroupedQuestions.map((question) => (
+                {/* Render topic-grouped questions */}
+                {groupByTopic && Object.entries(topicGroups).map(([topic, topicQuestions]) => {
+                  const isExpanded = expandedTopics.has(topic)
+                  return (
+                    <div key={topic} className="border-l-4 border-purple-500 pl-4">
+                      <button
+                        onClick={() => {
+                          const newExpanded = new Set(expandedTopics)
+                          if (isExpanded) {
+                            newExpanded.delete(topic)
+                          } else {
+                            newExpanded.add(topic)
+                          }
+                          setExpandedTopics(newExpanded)
+                        }}
+                        className="w-full text-left mb-2"
+                      >
+                        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-purple-900">{topic}</span>
+                            <span className="text-xs text-purple-600">({topicQuestions.length} question{topicQuestions.length !== 1 ? 's' : ''})</span>
+                          </div>
+                          <svg
+                            className={`w-5 h-5 text-purple-600 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="space-y-3 ml-4">
+                          {topicQuestions.map((question) => (
+                            <QuestionEntry
+                              key={question.id}
+                              question={question}
+                              onDownload={handleDownload}
+                              onDelete={handleDelete}
+                              deletingId={deletingId}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Render ungrouped questions (either when topic grouping is off, or untagged questions when it's on) */}
+                {(groupByTopic ? untaggedQuestions : regularQuestions).map((question) => (
                   <QuestionEntry
                     key={question.id}
                     question={question}
@@ -359,6 +436,8 @@ interface QuestionEntryProps {
 const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionEntryProps) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [updatingConfidence, setUpdatingConfidence] = useState(false)
+  const [localConfidence, setLocalConfidence] = useState<'confident' | 'uncertain' | 'not_confident' | undefined>(question.user_confidence)
   const menuRef = useRef<HTMLDivElement>(null)
   
   // Check if this is a mock exam
@@ -369,6 +448,25 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
   const totalExamsInSet = question.metadata?.total_exams_in_set as number | undefined
   const pageReferences = (question.metadata?.page_references as Array<{source_file?: string, page?: number}> | undefined) || []
   const coverageMetric = question.metadata?.coverage_metric as number | undefined
+
+  // Update local confidence when question prop changes
+  useEffect(() => {
+    setLocalConfidence(question.user_confidence)
+  }, [question.user_confidence])
+
+  const handleConfidenceChange = async (confidence: 'confident' | 'uncertain' | 'not_confident') => {
+    try {
+      setUpdatingConfidence(true)
+      setLocalConfidence(confidence)
+      await questionService.update(question.id, { user_confidence: confidence })
+      // Optionally reload questions to get updated data
+    } catch (err) {
+      console.error('Failed to update confidence:', err)
+      setLocalConfidence(question.user_confidence) // Revert on error
+    } finally {
+      setUpdatingConfidence(false)
+    }
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -493,6 +591,80 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
                   </div>
                 </div>
               )}
+              {/* Tags (slideset, slide, topic) */}
+              {(question.slideset || question.slide || question.topic) && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Tags</h4>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {question.slideset && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                        Slideset: {question.slideset}
+                      </span>
+                    )}
+                    {question.slide !== undefined && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                        Slide: {question.slide}
+                      </span>
+                    )}
+                    {question.topic && (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                        Topic: {question.topic}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Confidence selector */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Confidence</h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleConfidenceChange('confident')
+                    }}
+                    disabled={updatingConfidence}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                      localConfidence === 'confident'
+                        ? 'bg-green-100 text-green-700 border-2 border-green-500'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    } disabled:opacity-50`}
+                    title="Confident (✓)"
+                  >
+                    ✓ Confident
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleConfidenceChange('uncertain')
+                    }}
+                    disabled={updatingConfidence}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                      localConfidence === 'uncertain'
+                        ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-500'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    } disabled:opacity-50`}
+                    title="Uncertain (~)"
+                  >
+                    ~ Uncertain
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleConfidenceChange('not_confident')
+                    }}
+                    disabled={updatingConfidence}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                      localConfidence === 'not_confident'
+                        ? 'bg-red-100 text-red-700 border-2 border-red-500'
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    } disabled:opacity-50`}
+                    title="Not Confident (✗)"
+                  >
+                    ✗ Not Confident
+                  </button>
+                </div>
+              </div>
               {/* Coverage metric for mock exams */}
               {isMockExam && coverageMetric !== undefined && coverageMetric !== null && (
                 <div className="mt-3 pt-3 border-t border-gray-200">
