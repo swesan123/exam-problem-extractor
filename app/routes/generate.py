@@ -34,6 +34,9 @@ async def generate_question(
     mode: Optional[str] = Form("normal"),  # Generation mode: normal, mock_exam
     exam_format: Optional[str] = Form(None),  # For mock_exam mode
     max_coverage: bool = Form(False),  # For mock_exam mode: generate multiple exams until 95% coverage
+    question_count: Optional[int] = Form(None),  # Number of questions for mock exam (overrides parsed count)
+    weighting_rules: Optional[str] = Form(None),  # JSON string with weighting configuration (optional override)
+    focus_on_uncertain: bool = Form(False),  # Focus on uncertain topics
     db: Session = Depends(get_db),
 ):
     """
@@ -55,6 +58,9 @@ async def generate_question(
         class_id: Optional class ID to automatically save question to
         mode: Generation mode (normal, mock_exam)
         exam_format: Exam format template for mock_exam mode
+        question_count: Number of questions for mock exam (overrides parsed count from exam_format)
+        weighting_rules: JSON string with weighting configuration (optional override)
+        focus_on_uncertain: Focus on uncertain topics when generating mock exam
         db: Database session
 
     Returns:
@@ -138,6 +144,46 @@ async def generate_question(
                 detail="OCR text extraction failed or not provided",
             )
 
+        # Step 2: Pre-compute weighting rules for mock_exam mode (needed for retrieval)
+        final_weighting_rules = None
+        saved_mock_exam_ids = []
+        
+        if mode == "mock_exam":
+            generation_service = GenerationService()  # Initialize early for weighting rules
+            
+            # Parse weighting_rules if provided
+            parsed_weighting_rules = None
+            if weighting_rules:
+                try:
+                    parsed_weighting_rules = json.loads(weighting_rules)
+                except json.JSONDecodeError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="weighting_rules must be valid JSON",
+                    )
+            
+            # Generate default weighting rules if not provided
+            default_weighting_rules = None
+            if hasattr(generation_service, '_infer_weighting_rules'):
+                # Get exam_type from class if available
+                exam_type = None
+                if class_id:
+                    from app.services.class_service import ClassService
+                    class_service = ClassService(db)
+                    class_obj = class_service.get_class(class_id)
+                    if class_obj:
+                        # Try to get exam_type from class metadata or exam_format
+                        exam_type = getattr(class_obj, 'exam_type', None)
+                
+                default_weighting_rules = generation_service._infer_weighting_rules(
+                    exam_format, exam_type
+                )
+            
+            # Merge default and provided weighting rules (provided takes precedence)
+            final_weighting_rules = default_weighting_rules or {}
+            if parsed_weighting_rules:
+                final_weighting_rules.update(parsed_weighting_rules)
+        
         # Step 2: Retrieval (if context not provided)
         assessment_chunks = []
         lecture_chunks = []
@@ -171,13 +217,27 @@ async def generate_question(
                 top_k_lecture = 20 if mode == "mock_exam" else 3
                 
                 # Retrieve assessment references separately (for structure/format)
-                assessment_chunks_all = retrieval_service.retrieve_with_scores(
-                    ocr_text or "exam questions", top_k=top_k_assessment, class_id=class_id, reference_type="assessment"
-                )
-                # Retrieve lecture references separately (for content/topics)
-                lecture_chunks_all = retrieval_service.retrieve_with_scores(
-                    ocr_text or "exam questions", top_k=top_k_lecture, class_id=class_id, reference_type="lecture"
-                )
+                # Pass weighting_rules if available (for mock_exam mode)
+                retrieve_kwargs_assessment = {
+                    "query": ocr_text or "exam questions",
+                    "top_k": top_k_assessment,
+                    "class_id": class_id,
+                    "reference_type": "assessment"
+                }
+                retrieve_kwargs_lecture = {
+                    "query": ocr_text or "exam questions",
+                    "top_k": top_k_lecture,
+                    "class_id": class_id,
+                    "reference_type": "lecture"
+                }
+                
+                # Add weighting_rules if available (for mock_exam mode)
+                if mode == "mock_exam" and final_weighting_rules:
+                    retrieve_kwargs_assessment["weighting_rules"] = final_weighting_rules
+                    retrieve_kwargs_lecture["weighting_rules"] = final_weighting_rules
+                
+                assessment_chunks_all = retrieval_service.retrieve_with_scores(**retrieve_kwargs_assessment)
+                lecture_chunks_all = retrieval_service.retrieve_with_scores(**retrieve_kwargs_lecture)
                 
                 # For mock exam, use all chunks to maximize coverage (no threshold filtering)
                 # For other modes, filter by similarity threshold
@@ -237,42 +297,9 @@ async def generate_question(
             processing_steps.append("retrieval")
 
         # Step 3: Generation
-        generation_service = GenerationService()
-        
-        # Parse weighting_rules if provided (for mock_exam mode)
-        parsed_weighting_rules = None
-        if mode == "mock_exam" and weighting_rules:
-            try:
-                parsed_weighting_rules = json.loads(weighting_rules)
-            except json.JSONDecodeError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="weighting_rules must be valid JSON",
-                )
-        
-        # Generate default weighting rules if not provided (for mock_exam mode)
-        # Note: This assumes Agent 2 has added _infer_weighting_rules method
-        default_weighting_rules = None
-        if mode == "mock_exam" and hasattr(generation_service, '_infer_weighting_rules'):
-            # Get exam_type from class if available
-            exam_type = None
-            if class_id:
-                from app.services.class_service import ClassService
-                class_service = ClassService(db)
-                class_obj = class_service.get_class(class_id)
-                if class_obj:
-                    # Try to get exam_type from class metadata or exam_format
-                    exam_type = getattr(class_obj, 'exam_type', None)
-            
-            default_weighting_rules = generation_service._infer_weighting_rules(
-                exam_format, exam_type
-            )
-        
-        # Merge default and provided weighting rules (provided takes precedence)
-        if mode == "mock_exam":
-            final_weighting_rules = default_weighting_rules or {}
-            if parsed_weighting_rules:
-                final_weighting_rules.update(parsed_weighting_rules)
+        # Initialize generation service if not already done (for normal mode)
+        if mode != "mock_exam":
+            generation_service = GenerationService()
         
         # Route to appropriate generation method based on mode
         all_exams = []  # Initialize for use in saving logic
@@ -323,6 +350,8 @@ async def generate_question(
                     lecture_chunks=lecture_chunks,
                     references_used=references_used,
                     include_solution=include_solution,
+                    question_count=question_count,
+                    focus_on_uncertain=focus_on_uncertain,
                 )
                 exam_content = result.get("exam_content", "")
                 questions_list = result.get("questions", [])
