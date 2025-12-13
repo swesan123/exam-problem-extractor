@@ -80,13 +80,21 @@ class RetrievalService:
             query_embedding = self.embedding_service.generate_embedding(query)
 
             # Build where clause for filtering
+            # ChromaDB requires using operators ($and, $or) when there are multiple conditions
             where_clause = None
             if class_id or reference_type:
-                where_clause = {}
-                if class_id:
-                    where_clause["class_id"] = class_id
-                if reference_type:
-                    where_clause["reference_type"] = reference_type
+                if class_id and reference_type:
+                    # Multiple conditions need $and operator
+                    where_clause = {
+                        "$and": [
+                            {"class_id": class_id},
+                            {"reference_type": reference_type}
+                        ]
+                    }
+                elif class_id:
+                    where_clause = {"class_id": class_id}
+                elif reference_type:
+                    where_clause = {"reference_type": reference_type}
 
             # Perform similarity search
             collection = self.embedding_service.collection

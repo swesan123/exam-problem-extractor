@@ -120,17 +120,31 @@ async def generate_question(
             retrieval_service = RetrievalService(embedding_service)
             
             if class_id:
+                from app.config import settings
+                
                 # Retrieve assessment references separately (for structure/format)
-                assessment_chunks = retrieval_service.retrieve_with_scores(
+                assessment_chunks_all = retrieval_service.retrieve_with_scores(
                     ocr_text, top_k=3, class_id=class_id, reference_type="assessment"
                 )
                 # Retrieve lecture references separately (for content/topics)
-                lecture_chunks = retrieval_service.retrieve_with_scores(
+                lecture_chunks_all = retrieval_service.retrieve_with_scores(
                     ocr_text, top_k=3, class_id=class_id, reference_type="lecture"
                 )
                 
-                # Build references_used tracking
-                for chunk in assessment_chunks:
+                # Filter chunks by similarity threshold
+                min_threshold = settings.min_similarity_threshold
+                assessment_chunks = [
+                    chunk for chunk in assessment_chunks_all 
+                    if chunk.score >= min_threshold
+                ]
+                lecture_chunks = [
+                    chunk for chunk in lecture_chunks_all 
+                    if chunk.score >= min_threshold
+                ]
+                
+                # Build references_used tracking (include all retrieved, even if below threshold)
+                # This allows us to show what was retrieved but not used
+                for chunk in assessment_chunks_all:
                     references_used["assessment"].append(
                         ReferenceCitation(
                             source_file=chunk.metadata.get("source_file", "unknown"),
@@ -140,7 +154,7 @@ async def generate_question(
                         )
                     )
                 
-                for chunk in lecture_chunks:
+                for chunk in lecture_chunks_all:
                     references_used["lecture"].append(
                         ReferenceCitation(
                             source_file=chunk.metadata.get("source_file", "unknown"),
@@ -172,18 +186,42 @@ async def generate_question(
         generation_service = GenerationService()
         
         # Use separate assessment/lecture contexts if available, otherwise fallback
+        # Note: assessment_chunks and lecture_chunks are now filtered by similarity threshold
         if assessment_chunks or lecture_chunks:
+            # Convert references_used to dict format for generation service
+            # Only include references that passed the similarity threshold (those in assessment_chunks/lecture_chunks)
+            refs_dict = None
+            if references_used:
+                from app.config import settings
+                min_threshold = settings.min_similarity_threshold
+                
+                # Filter to only include references that passed threshold
+                filtered_assessment = [
+                    ref.dict() for ref in references_used.get("assessment", [])
+                    if ref.score >= min_threshold
+                ]
+                filtered_lecture = [
+                    ref.dict() for ref in references_used.get("lecture", [])
+                    if ref.score >= min_threshold
+                ]
+                
+                if filtered_assessment or filtered_lecture:
+                    refs_dict = {
+                        "assessment": filtered_assessment,
+                        "lecture": filtered_lecture,
+                    }
+            
             # Use new method with reference types
             if include_solution:
                 result = generation_service.generate_with_reference_types_and_solution(
-                    ocr_text, assessment_chunks, lecture_chunks
+                    ocr_text, assessment_chunks, lecture_chunks, refs_dict
                 )
                 question = result["question"]
                 if result.get("solution"):
                     question += f"\n\nSolution:\n{result['solution']}"
             else:
                 result = generation_service.generate_with_reference_types(
-                    ocr_text, assessment_chunks, lecture_chunks
+                    ocr_text, assessment_chunks, lecture_chunks, refs_dict
                 )
                 question = result["question"]
         else:

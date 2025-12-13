@@ -119,9 +119,9 @@ if [ "$RUN_FRONTEND" = true ]; then
         cd ..
     fi
     
-    # Check if port 5173 (Vite default) is available
-    if check_port 5173; then
-        echo -e "${YELLOW}Port 5173 is already in use. Vite will use the next available port.${NC}"
+    # Check if port 3000 (Vite configured port) is available
+    if check_port 3000; then
+        echo -e "${YELLOW}Port 3000 is already in use. Vite will use the next available port.${NC}"
     fi
 fi
 
@@ -187,7 +187,7 @@ if [ "$RUN_BACKEND" = true ]; then
     echo -e "${BLUE}API Docs:${NC} http://localhost:8000/docs"
 fi
 if [ "$RUN_FRONTEND" = true ]; then
-    echo -e "${BLUE}Frontend:${NC} http://localhost:5173"
+    echo -e "${BLUE}Frontend:${NC} http://localhost:3000"
 fi
 echo -e "${GREEN}========================================${NC}"
 echo ""

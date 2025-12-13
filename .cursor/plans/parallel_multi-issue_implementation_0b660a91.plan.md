@@ -29,12 +29,12 @@ todos:
       - issue-58-db-model
   - id: issue-58-processor-integration
     content: Integrate metrics tracking into reference_processor.py
-    status: in_progress
+    status: completed
     dependencies:
       - issue-58-metrics-service
   - id: issue-58-api-response
     content: Extend job API response to include ETA and metrics summary
-    status: pending
+    status: completed
     dependencies:
       - issue-58-processor-integration
   - id: issue-59-ui-audit

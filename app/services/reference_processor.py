@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.db.database import SessionLocal
 from app.db.models import ReferenceUploadJob
 from app.services.embedding_service import EmbeddingService
 from app.services.ocr_service import OCRService
@@ -72,6 +73,7 @@ class ReferenceProcessor:
             db.commit()
 
             # Process files in parallel
+            # Note: Each thread will create its own database session
             futures = []
             for file_path, original_filename in file_info_list:
                 future = self.executor.submit(
@@ -80,22 +82,25 @@ class ReferenceProcessor:
                     file_path,
                     original_filename,
                     metadata,
-                    db,
                 )
                 futures.append((original_filename, future))
 
             # Wait for completion and update progress
+            # Each file processing thread handles its own status updates via its own session
             for filename, future in futures:
                 try:
                     result = future.result()  # Blocks until complete
-                    self._update_file_status(db, job_id, filename, "completed", 100)
-                    self._increment_processed_files(db, job_id)
+                    # Status updates are handled within _process_single_file using its own session
                 except Exception as e:
                     logger.error(
                         f"Failed to process file {filename}: {e}", exc_info=True
                     )
-                    self._update_file_status(db, job_id, filename, "failed", 0, str(e))
-                    self._increment_failed_files(db, job_id)
+                    # Update status using main session for final error state
+                    try:
+                        self._update_file_status(db, job_id, filename, "failed", 0, str(e))
+                        self._increment_failed_files(db, job_id)
+                    except Exception as db_error:
+                        logger.error(f"Failed to update error status in database: {db_error}")
 
             # Mark job as completed
             job = (
@@ -131,22 +136,23 @@ class ReferenceProcessor:
         file_path: Path,
         original_filename: str,
         metadata: Dict,
-        db: Session,
     ) -> Dict:
         """
         Process a single file: OCR → Chunk → Embed → Store.
         Runs in parallel with other files.
+        Creates its own database session for thread safety.
 
         Args:
             job_id: Job ID
             file_path: Path to temp file to process
             original_filename: Original filename from upload
             metadata: Metadata dict with class_id, exam_source, exam_type, reference_type
-            db: Database session
 
         Returns:
             Dict with success status and chunk count
         """
+        # Create a new database session for this thread
+        db = SessionLocal()
         try:
             # Step 1: OCR extraction (with rate limiting)
             with self.ocr_semaphore:
@@ -170,6 +176,10 @@ class ReferenceProcessor:
                 self._update_file_status(
                     db, job_id, original_filename, "processing", 90
                 )
+            
+            # Mark as completed
+            self._update_file_status(db, job_id, original_filename, "completed", 100)
+            self._increment_processed_files(db, job_id)
 
             return {"success": True, "chunks": len(chunks)}
 
@@ -177,7 +187,16 @@ class ReferenceProcessor:
             logger.error(
                 f"Failed to process {original_filename}: {e}", exc_info=True
             )
+            # Update status to failed
+            try:
+                self._update_file_status(db, job_id, original_filename, "failed", 0, str(e))
+                self._increment_failed_files(db, job_id)
+            except Exception as db_error:
+                logger.error(f"Failed to update error status in database: {db_error}")
             raise
+        finally:
+            # Always close the session
+            db.close()
 
     def _extract_text_ocr(self, file_path: Path) -> str:
         """
