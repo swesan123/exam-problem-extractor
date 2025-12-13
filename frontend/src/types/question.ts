@@ -28,5 +28,12 @@ export interface GenerateResponse {
     assessment?: ReferenceCitation[]
     lecture?: ReferenceCitation[]
   }
+  mock_exam_id?: string
+  weighting_rules?: {
+    pre_midterm_weight?: number
+    post_midterm_weight?: number
+    region_weights?: Record<string, number>
+    slide_ranges?: Array<{start: number, end: number, weight: number}>
+  }
 }
 

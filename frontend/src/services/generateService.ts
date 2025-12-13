@@ -10,6 +10,9 @@ export interface GenerateRequest {
   mode?: 'normal' | 'mock_exam'
   exam_format?: string
   max_coverage?: boolean
+  question_count?: number
+  weighting_rules?: string // JSON string
+  focus_on_uncertain?: boolean
 }
 
 export const generateService = {
@@ -39,6 +42,15 @@ export const generateService = {
     }
     if (data.max_coverage !== undefined) {
       formData.append('max_coverage', String(data.max_coverage))
+    }
+    if (data.question_count !== undefined) {
+      formData.append('question_count', String(data.question_count))
+    }
+    if (data.weighting_rules) {
+      formData.append('weighting_rules', data.weighting_rules)
+    }
+    if (data.focus_on_uncertain !== undefined) {
+      formData.append('focus_on_uncertain', String(data.focus_on_uncertain))
     }
 
     const response = await apiClient.post<GenerateResponse>('/generate', formData, {
