@@ -239,6 +239,41 @@ async def generate_question(
         # Step 3: Generation
         generation_service = GenerationService()
         
+        # Parse weighting_rules if provided (for mock_exam mode)
+        parsed_weighting_rules = None
+        if mode == "mock_exam" and weighting_rules:
+            try:
+                parsed_weighting_rules = json.loads(weighting_rules)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="weighting_rules must be valid JSON",
+                )
+        
+        # Generate default weighting rules if not provided (for mock_exam mode)
+        # Note: This assumes Agent 2 has added _infer_weighting_rules method
+        default_weighting_rules = None
+        if mode == "mock_exam" and hasattr(generation_service, '_infer_weighting_rules'):
+            # Get exam_type from class if available
+            exam_type = None
+            if class_id:
+                from app.services.class_service import ClassService
+                class_service = ClassService(db)
+                class_obj = class_service.get_class(class_id)
+                if class_obj:
+                    # Try to get exam_type from class metadata or exam_format
+                    exam_type = getattr(class_obj, 'exam_type', None)
+            
+            default_weighting_rules = generation_service._infer_weighting_rules(
+                exam_format, exam_type
+            )
+        
+        # Merge default and provided weighting rules (provided takes precedence)
+        if mode == "mock_exam":
+            final_weighting_rules = default_weighting_rules or {}
+            if parsed_weighting_rules:
+                final_weighting_rules.update(parsed_weighting_rules)
+        
         # Route to appropriate generation method based on mode
         all_exams = []  # Initialize for use in saving logic
         result = None  # Initialize for use in saving logic
@@ -449,86 +484,158 @@ async def generate_question(
             try:
                 question_service = QuestionService(db)
                 
-                # For mock_exam mode, save exams as single entries (full exam_content)
+                # For mock_exam mode, create MockExam objects and link individual questions
                 if mode == "mock_exam" and questions:
+                    from app.db.models import MockExam
+                    
                     saved_question_ids = []
+                    saved_mock_exam_ids = []
                     exam_set_id = str(uuid.uuid4()) if max_coverage else None
                     
                     for idx, exam_content_text in enumerate(questions):
                         try:
-                            # Get the individual questions list for this exam (for metadata)
+                            # Get the individual questions list for this exam
                             individual_questions = []
                             if max_coverage and idx < len(all_exams):
                                 individual_questions = all_exams[idx].get("questions", [])
                             elif not max_coverage and result:
                                 individual_questions = result.get("questions", [])
                             
-                            # Build metadata
-                            exam_metadata = {
-                                "generated": True,
-                                "processing_steps": processing_steps,
-                                "generation_metadata": metadata,
-                                "is_mock_exam": True,
-                                "exam_type": "max_coverage" if max_coverage else "single",
-                                "individual_questions": individual_questions,  # Store for reference
-                            }
+                            # Extract exam title and instructions from exam_content
+                            exam_title = None
+                            exam_instructions = None
+                            if exam_content_text:
+                                lines = exam_content_text.split('\n')
+                                # Try to extract title (usually first line or after "Exam:" or "Title:")
+                                for i, line in enumerate(lines[:5]):  # Check first 5 lines
+                                    line_lower = line.lower().strip()
+                                    if line_lower.startswith('exam:') or line_lower.startswith('title:'):
+                                        exam_title = line.split(':', 1)[1].strip() if ':' in line else None
+                                    elif i == 0 and len(line.strip()) > 0 and len(line.strip()) < 100:
+                                        exam_title = line.strip()
+                                    
+                                    # Look for instructions section
+                                    if 'instruction' in line_lower:
+                                        # Get next few lines as instructions
+                                        exam_instructions = '\n'.join(lines[i+1:i+5]).strip()
                             
-                            # For max coverage, get page references from the specific exam
+                            # Create MockExam object
+                            mock_exam_id = str(uuid.uuid4())
+                            mock_exam = MockExam(
+                                id=mock_exam_id,
+                                class_id=class_id,
+                                title=exam_title,
+                                instructions=exam_instructions,
+                                exam_format=exam_format,
+                                weighting_rules=final_weighting_rules if final_weighting_rules else {},
+                                exam_metadata={
+                                    "generated": True,
+                                    "processing_steps": processing_steps,
+                                    "generation_metadata": metadata,
+                                    "exam_type": "max_coverage" if max_coverage else "single",
+                                }
+                            )
+                            
+                            # For max coverage, add set metadata
+                            if max_coverage:
+                                mock_exam.exam_metadata["exam_set_id"] = exam_set_id
+                                mock_exam.exam_metadata["exam_index"] = idx
+                                mock_exam.exam_metadata["total_exams_in_set"] = len(questions)
+                            
+                            # Add page references and coverage metrics
                             if max_coverage and idx < len(all_exams):
                                 exam_page_refs = all_exams[idx].get("page_references", [])
                                 if exam_page_refs:
-                                    exam_metadata["page_references"] = exam_page_refs
-                                # Also add final coverage from batch metadata
-                                exam_metadata["final_coverage"] = metadata.get("final_coverage", 0.0)
+                                    mock_exam.exam_metadata["page_references"] = exam_page_refs
+                                mock_exam.exam_metadata["final_coverage"] = metadata.get("final_coverage", 0.0)
                             elif not max_coverage and "page_references" in metadata:
-                                # Single mock exam - use page references from metadata
-                                exam_metadata["page_references"] = metadata.get("page_references", [])
+                                mock_exam.exam_metadata["page_references"] = metadata.get("page_references", [])
                             
-                            # For max coverage, link exams together
-                            if max_coverage:
-                                exam_metadata["exam_set_id"] = exam_set_id
-                                exam_metadata["exam_index"] = idx
-                                exam_metadata["total_exams_in_set"] = len(questions)
-                            
-                            # Add coverage metric if available
                             if "coverage_metric" in metadata:
-                                exam_metadata["coverage_metric"] = metadata.get("coverage_metric")
+                                mock_exam.exam_metadata["coverage_metric"] = metadata.get("coverage_metric")
                             elif max_coverage and "final_coverage" in metadata:
-                                exam_metadata["coverage_metric"] = metadata.get("final_coverage", 0.0)
+                                mock_exam.exam_metadata["coverage_metric"] = metadata.get("final_coverage", 0.0)
                             
-                            question_data = QuestionCreate(
-                                class_id=class_id,
-                                question_text=exam_content_text,  # Full exam content as single entry
-                                solution=None,  # Solutions are included in exam_content if include_solution was True
-                                metadata=exam_metadata,
-                                source_image=str(temp_path) if temp_path else None,
-                            )
-                            saved_question = question_service.create_question(question_data)
-                            # #region agent log
-                            with open('/home/swesan/exam-problem-extractor/.cursor/debug.log', 'a') as f:
-                                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"generate.py:501","message":"Mock exam saved successfully","data":{"exam_index":idx,"question_id":saved_question.id,"class_id":class_id,"timestamp":__import__('time').time()*1000},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                            # #endregion
-                            saved_question_ids.append(saved_question.id)
+                            db.add(mock_exam)
+                            db.flush()  # Flush to get the ID
+                            
+                            # Create individual Question objects linked to MockExam
+                            # Extract tags from reference chunks if available
+                            for q_idx, question_text in enumerate(individual_questions):
+                                # Try to extract tags from reference chunks
+                                # Use the chunk that was most relevant for this question
+                                question_slideset = None
+                                question_slide = None
+                                question_topic = None
+                                
+                                # For now, we'll extract tags from the first relevant chunk
+                                # Agent 2 should have added logic to extract tags per question
+                                if assessment_chunks or lecture_chunks:
+                                    # Use first chunk's metadata as default (can be improved)
+                                    first_chunk = (assessment_chunks + lecture_chunks)[0] if (assessment_chunks or lecture_chunks) else None
+                                    if first_chunk and first_chunk.metadata:
+                                        # Merge auto_tags and user_overrides (user_overrides take precedence)
+                                        effective_metadata = first_chunk.metadata.get("auto_tags", {}).copy()
+                                        effective_metadata.update(first_chunk.metadata.get("user_overrides", {}))
+                                        
+                                        question_slideset = effective_metadata.get("slideset") or first_chunk.metadata.get("slideset")
+                                        question_slide = effective_metadata.get("slide_number") or first_chunk.metadata.get("slide_number")
+                                        question_topic = effective_metadata.get("topic") or first_chunk.metadata.get("topic")
+                                
+                                question_data = QuestionCreate(
+                                    class_id=class_id,
+                                    question_text=question_text,
+                                    solution=None,  # Solutions are included in exam_content if include_solution was True
+                                    metadata={
+                                        "generated": True,
+                                        "is_mock_exam_question": True,
+                                        "question_index": q_idx + 1,
+                                    },
+                                    source_image=str(temp_path) if temp_path else None,
+                                )
+                                
+                                saved_question = question_service.create_question(question_data)
+                                
+                                # Update question with mock_exam_id and tags
+                                saved_question.mock_exam_id = mock_exam_id
+                                saved_question.slideset = question_slideset
+                                saved_question.slide = question_slide
+                                saved_question.topic = question_topic
+                                
+                                saved_question_ids.append(saved_question.id)
+                            
+                            # If no individual questions were extracted, create one question with full exam content
+                            if not individual_questions:
+                                question_data = QuestionCreate(
+                                    class_id=class_id,
+                                    question_text=exam_content_text,
+                                    solution=None,
+                                    metadata={
+                                        "generated": True,
+                                        "is_mock_exam_question": True,
+                                        "full_exam_content": True,
+                                    },
+                                    source_image=str(temp_path) if temp_path else None,
+                                )
+                                saved_question = question_service.create_question(question_data)
+                                saved_question.mock_exam_id = mock_exam_id
+                                saved_question_ids.append(saved_question.id)
+                            
+                            db.commit()
+                            saved_mock_exam_ids.append(mock_exam_id)
+                            
+                            logger.info(f"Created mock exam {mock_exam_id} with {len(individual_questions) or 1} question(s)")
+                            
                         except Exception as e:
-                            # #region agent log
-                            with open('/home/swesan/exam-problem-extractor/.cursor/debug.log', 'a') as f:
-                                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"generate.py:504","message":"Failed to save mock exam","data":{"exam_index":idx,"error":str(e),"error_type":type(e).__name__,"class_id":class_id,"timestamp":__import__('time').time()*1000},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                            # #endregion
-                            logger.warning(f"Failed to save mock exam {idx + 1} of {len(questions)}: {e}")
+                            db.rollback()
+                            logger.warning(f"Failed to save mock exam {idx + 1} of {len(questions)}: {e}", exc_info=True)
                     
-                    if saved_question_ids:
-                        question_id = saved_question_ids[0]  # Return first question ID for compatibility
+                    if saved_mock_exam_ids:
+                        question_id = saved_question_ids[0] if saved_question_ids else None
                         saved_class_id = class_id
-                        # #region agent log
-                        with open('/home/swesan/exam-problem-extractor/.cursor/debug.log', 'a') as f:
-                            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C","location":"generate.py:509","message":"Mock exams saved successfully","data":{"saved_count":len(saved_question_ids),"class_id":class_id,"question_ids":saved_question_ids[:3],"timestamp":__import__('time').time()*1000},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                        # #endregion
-                        logger.info(f"Saved {len(saved_question_ids)} mock exam(s) to class {class_id}")
+                        logger.info(f"Saved {len(saved_mock_exam_ids)} mock exam(s) to class {class_id}")
                     else:
-                        # #region agent log
-                        with open('/home/swesan/exam-problem-extractor/.cursor/debug.log', 'a') as f:
-                            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"generate.py:512","message":"No mock exams saved","data":{"questions_count":len(questions) if questions else 0,"class_id":class_id,"timestamp":__import__('time').time()*1000},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                        # #endregion
+                        logger.warning(f"No mock exams saved for class {class_id}")
                 elif mode == "normal" and question:
                     # Normal mode: save single question
                     # Extract solution if included
@@ -573,6 +680,11 @@ async def generate_question(
         # For max coverage mode, return all exam contents
         questions_for_response = questions if mode == "mock_exam" else None
         
+        # Get mock_exam_id if we created one
+        mock_exam_id = None
+        if mode == "mock_exam" and saved_class_id and saved_mock_exam_ids:
+            mock_exam_id = saved_mock_exam_ids[0]  # Return first mock exam ID
+        
         return GenerateResponse(
             question=question if mode == "normal" else None,
             questions=questions_for_response,
@@ -581,6 +693,8 @@ async def generate_question(
             question_id=question_id,
             class_id=saved_class_id,
             references_used=references_used,
+            mock_exam_id=mock_exam_id,
+            weighting_rules=final_weighting_rules if mode == "mock_exam" and final_weighting_rules else None,
         )
 
     except HTTPException:
