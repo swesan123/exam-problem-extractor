@@ -37,6 +37,11 @@ const ClassDetails = () => {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Exam format editor state
+  const [examFormat, setExamFormat] = useState('')
+  const [isEditingExamFormat, setIsEditingExamFormat] = useState(false)
+  const [savingExamFormat, setSavingExamFormat] = useState(false)
 
   useEffect(() => {
     const loadReferenceContent = async () => {
@@ -62,6 +67,7 @@ const ClassDetails = () => {
         setError(null)
         const data = await classService.getById(id)
         setClassItem(data)
+        setExamFormat(data.exam_format || '')
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load class')
       } finally {
@@ -267,6 +273,21 @@ const ClassDetails = () => {
     }
   }
 
+  const handleSaveExamFormat = async () => {
+    if (!id) return
+    
+    try {
+      setSavingExamFormat(true)
+      const updated = await classService.updateExamFormat(id, examFormat)
+      setClassItem(updated)
+      setIsEditingExamFormat(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save exam format')
+    } finally {
+      setSavingExamFormat(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -316,6 +337,66 @@ const ClassDetails = () => {
           </div>
         )}
 
+        {/* Exam Format Section */}
+        <div className="mb-6 pt-6 border-t border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Exam Format</h2>
+            {!isEditingExamFormat && (
+              <button
+                onClick={() => setIsEditingExamFormat(true)}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+              >
+                {classItem.exam_format ? 'Edit' : 'Set Exam Format'}
+              </button>
+            )}
+          </div>
+
+          {isEditingExamFormat ? (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <label htmlFor="exam_format" className="block text-sm font-medium text-gray-700 mb-2">
+                Exam Format Template
+              </label>
+              <textarea
+                id="exam_format"
+                value={examFormat}
+                onChange={(e) => setExamFormat(e.target.value)}
+                placeholder="e.g., '5 multiple choice questions, 3 short answer questions, 2 long answer questions'"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Example: "10 questions total: 6 multiple choice (2 points each), 4 short answer (5 points each)"
+              </p>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setIsEditingExamFormat(false)
+                    setExamFormat(classItem.exam_format || '')
+                  }}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  disabled={savingExamFormat}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveExamFormat}
+                  disabled={savingExamFormat}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingExamFormat ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              {classItem.exam_format ? (
+                <p className="text-gray-900">{classItem.exam_format}</p>
+              ) : (
+                <p className="text-gray-500 italic">No exam format set. Click "Set Exam Format" to add one.</p>
+              )}
+            </div>
+          )}
+        </div>
         {/* Reference Content Section */}
         <div className="mt-6 pt-6 border-t border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">

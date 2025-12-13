@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import JSZip from 'jszip'
 import { questionService } from '../services/questionService'
-import { exportService, ExportFormat } from '../services/exportService'
+import { exportService } from '../services/exportService'
+import apiClient from '../services/api'
 import { Question } from '../types/question'
 import { classService } from '../services/classService'
 import { Class } from '../types/class'
+import LatexRenderer from '../components/LatexRenderer'
 
 const ClassQuestions = () => {
   const { id } = useParams<{ id: string }>()
@@ -18,6 +21,8 @@ const ClassQuestions = () => {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingAll, setDeletingAll] = useState(false)
+  const [downloadingSet, setDownloadingSet] = useState<string | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -45,20 +50,6 @@ const ClassQuestions = () => {
     loadData()
   }, [id])
 
-  const handleExport = async (format: ExportFormat) => {
-    if (!id) return
-
-    try {
-      setExporting(true)
-      const blob = await exportService.exportClass(id, format)
-      const filename = `${classItem?.name || 'questions'}.${format}`
-      exportService.downloadBlob(blob, filename)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export questions')
-    } finally {
-      setExporting(false)
-    }
-  }
 
   const handleDelete = async (questionId: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return
@@ -76,11 +67,92 @@ const ClassQuestions = () => {
     }
   }
 
-  const handleDownload = async (questionId: string, format: 'txt' | 'pdf' | 'docx' | 'json' = 'txt') => {
+  const handleDeleteAll = async () => {
+    if (!id || questions.length === 0) return
+    if (!confirm(`Are you sure you want to delete all ${questions.length} question(s)? This action cannot be undone.`)) return
+
     try {
-      await questionService.download(questionId, format, false)
+      setDeletingAll(true)
+      setError(null)
+      // Delete all questions sequentially
+      for (const question of questions) {
+        await questionService.delete(question.id)
+      }
+      // Reload questions (should be empty now)
+      const questionsData = await questionService.getByClass(id)
+      setQuestions(questionsData.questions)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete all questions')
+    } finally {
+      setDeletingAll(false)
+    }
+  }
+
+  const handleDownloadExamSet = async (examSetId: string, exams: Question[]) => {
+    try {
+      setDownloadingSet(examSetId)
+      setError(null)
+      
+      const zip = new JSZip()
+      
+      // Download each exam as PDF and add to zip
+      for (let idx = 0; idx < exams.length; idx++) {
+        const exam = exams[idx]
+        try {
+          // Use apiClient to download the PDF blob
+          const response = await apiClient.get(
+            `/api/questions/${exam.id}/download`,
+            {
+              params: { format: 'pdf', include_solution: false },
+              responseType: 'blob',
+            }
+          )
+          
+          const blob = response.data
+          const examIndex = (exam.metadata?.exam_index as number | undefined) ?? idx
+          zip.file(`Mock_Exam_${examIndex + 1}.pdf`, blob)
+        } catch (err) {
+          console.error(`Failed to download exam ${idx + 1}:`, err)
+          // Continue with other exams even if one fails
+        }
+      }
+      
+      // Generate zip file
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const url = window.URL.createObjectURL(zipBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Mock_Exams_Set_${examSetId.substring(0, 8)}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download exam set')
+    } finally {
+      setDownloadingSet(null)
+    }
+  }
+
+  const handleDownload = async (questionId: string) => {
+    try {
+      await questionService.download(questionId, 'pdf', false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to download question')
+    }
+  }
+
+  const handleDownloadAll = async () => {
+    if (!id || questions.length === 0) return
+    try {
+      setExporting(true)
+      const blob = await exportService.exportClass(id, 'pdf')
+      const filename = `${classItem?.name || 'questions'}.pdf`
+      exportService.downloadBlob(blob, filename)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export all questions')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -110,20 +182,6 @@ const ClassQuestions = () => {
     )
   }
 
-  const handleDownloadAll = async (format: ExportFormat) => {
-    if (!id || questions.length === 0) return
-    try {
-      setExporting(true)
-      const blob = await exportService.exportClass(id, format)
-      const filename = `${classItem?.name || 'questions'}.${format}`
-      exportService.downloadBlob(blob, filename)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export all questions')
-    } finally {
-      setExporting(false)
-    }
-  }
-
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <div className="px-6 py-6 sm:px-8 flex-1 overflow-y-auto">
@@ -143,23 +201,20 @@ const ClassQuestions = () => {
 
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center space-x-2">
-          <select
-            onChange={(e) => {
-              const format = e.target.value as ExportFormat
-              if (format) {
-                handleDownloadAll(format)
-                e.target.value = ''
-              }
-            }}
+          <button
+            onClick={handleDownloadAll}
             disabled={exporting || questions.length === 0}
-            className="px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="">Download All...</option>
-            <option value="txt">TXT</option>
-            <option value="pdf">PDF</option>
-            <option value="docx">DOCX</option>
-            <option value="json">JSON</option>
-          </select>
+            {exporting ? 'Exporting...' : 'Download All as PDF'}
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            disabled={deletingAll || questions.length === 0}
+            className="px-4 py-2 border border-red-300 rounded-md bg-white text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deletingAll ? 'Deleting...' : 'Delete All Questions'}
+          </button>
           {exporting && (
             <span className="text-sm text-gray-600">Exporting...</span>
           )}
@@ -198,15 +253,95 @@ const ClassQuestions = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredQuestions.map((question) => (
-            <QuestionEntry
-              key={question.id}
-              question={question}
-              onDownload={handleDownload}
-              onDelete={handleDelete}
-              deletingId={deletingId}
-            />
-          ))}
+          {(() => {
+            // Group max coverage exams by exam_set_id
+            const groupedQuestions: { [key: string]: Question[] } = {}
+            const ungroupedQuestions: Question[] = []
+            
+            filteredQuestions.forEach((question) => {
+              const isMaxCoverage = question.metadata?.is_mock_exam && question.metadata?.exam_type === 'max_coverage'
+              const examSetId = question.metadata?.exam_set_id as string | undefined
+              
+              if (isMaxCoverage && examSetId) {
+                if (!groupedQuestions[examSetId]) {
+                  groupedQuestions[examSetId] = []
+                }
+                groupedQuestions[examSetId].push(question)
+              } else {
+                ungroupedQuestions.push(question)
+              }
+            })
+            
+            // Sort grouped exams by exam_index
+            Object.keys(groupedQuestions).forEach(key => {
+              groupedQuestions[key].sort((a, b) => {
+                const aIndex = (a.metadata?.exam_index as number | undefined) || 0
+                const bIndex = (b.metadata?.exam_index as number | undefined) || 0
+                return aIndex - bIndex
+              })
+            })
+            
+            return (
+              <>
+                {/* Render grouped max coverage exams */}
+                {Object.entries(groupedQuestions).map(([examSetId, exams]) => {
+                  const firstExam = exams[0]
+                  const coverageMetric = firstExam.metadata?.coverage_metric || firstExam.metadata?.final_coverage
+                  const examType = firstExam.metadata?.exam_type
+                  const examIndex = firstExam.metadata?.exam_index
+                  const totalExamsInSet = firstExam.metadata?.total_exams_in_set || exams.length
+                  
+                  return (
+                    <div key={examSetId} className="space-y-3 border-l-4 border-green-500 pl-4">
+                      <div className="mb-3 pb-3 border-b border-green-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
+                              Max Coverage Exam Set
+                            </span>
+                            {coverageMetric !== undefined && coverageMetric !== null && (
+                              <span className="text-xs text-gray-600">
+                                Coverage: {(coverageMetric * 100).toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDownloadExamSet(examSetId, exams)}
+                            disabled={downloadingSet === examSetId}
+                            className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {downloadingSet === examSetId ? 'Downloading...' : 'Download All as ZIP'}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          {totalExamsInSet} exam{totalExamsInSet !== 1 ? 's' : ''} in this set
+                        </p>
+                      </div>
+                      {exams.map((question) => (
+                        <QuestionEntry
+                          key={question.id}
+                          question={question}
+                          onDownload={handleDownload}
+                          onDelete={handleDelete}
+                          deletingId={deletingId}
+                        />
+                      ))}
+                    </div>
+                  )
+                })}
+                {/* Render ungrouped questions */}
+                {ungroupedQuestions.map((question) => (
+                  <QuestionEntry
+                    key={question.id}
+                    question={question}
+                    onDownload={handleDownload}
+                    onDelete={handleDelete}
+                    deletingId={deletingId}
+                  />
+                ))}
+              </>
+            )
+          })()}
         </div>
       )}
       </div>
@@ -216,7 +351,7 @@ const ClassQuestions = () => {
 
 interface QuestionEntryProps {
   question: Question
-  onDownload: (id: string, format: 'txt' | 'pdf' | 'docx' | 'json') => void
+  onDownload: (id: string) => void
   onDelete: (id: string) => void
   deletingId: string | null
 }
@@ -225,6 +360,15 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
   const [menuOpen, setMenuOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  
+  // Check if this is a mock exam
+  const isMockExam = question.metadata && question.metadata.is_mock_exam === true
+  const examType = question.metadata?.exam_type as string | undefined
+  const examSetId = question.metadata?.exam_set_id as string | undefined
+  const examIndex = question.metadata?.exam_index as number | undefined
+  const totalExamsInSet = question.metadata?.total_exams_in_set as number | undefined
+  const pageReferences = (question.metadata?.page_references as Array<{source_file?: string, page?: number}> | undefined) || []
+  const coverageMetric = question.metadata?.coverage_metric as number | undefined
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -242,25 +386,76 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
   }, [menuOpen])
 
   const getQuestionName = (text: string) => {
+    // Check if this looks like a mock exam (starts with # heading)
+    if (text.trim().startsWith('#')) {
+      const lines = text.split('\n')
+      const firstLine = lines[0].replace(/^#+\s*/, '').trim()
+      if (firstLine.length > 60) return firstLine.substring(0, 60) + '...'
+      return firstLine || 'Mock Exam'
+    }
+    
     const lines = text.split('\n')
-    const firstLine = lines[0].replace(/\*\*/g, '').trim()
+    // Remove markdown bold (**text**) and LaTeX delimiters for preview
+    const firstLine = lines[0]
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove markdown bold
+      .replace(/\\?[\(\[].*?\\?[\)\]]/g, '') // Remove LaTeX math
+      .replace(/\$.*?\$/g, '') // Remove $ math
+      .trim()
     if (firstLine.length > 60) return firstLine.substring(0, 60) + '...'
     return firstLine || 'Question'
   }
 
   const getQuestionPreview = (text: string, maxLength: number = 100) => {
-    const cleaned = text.replace(/\*\*/g, '').replace(/\n/g, ' ').trim()
+    // Remove markdown and LaTeX for preview
+    const cleaned = text
+      .replace(/^#+\s*/gm, '') // Remove markdown headings (#, ##, ###, etc.)
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove markdown bold
+      .replace(/\*([^*]+)\*/g, '$1') // Remove markdown italic
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code
+      .replace(/\\?[\(\[].*?\\?[\)\]]/g, '') // Remove LaTeX math
+      .replace(/\$.*?\$/g, '') // Remove $ math
+      .replace(/---+/g, '') // Remove horizontal rules
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .trim()
     if (cleaned.length <= maxLength) return cleaned
     return cleaned.substring(0, maxLength) + '...'
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-md transition">
+    <div className={`bg-white rounded-lg border ${isMockExam ? 'border-purple-300' : 'border-gray-200'} p-5 hover:shadow-md transition`}>
+      {isMockExam && examType === 'max_coverage' && examIndex === 0 && (
+        <div className="mb-3 pb-3 border-b border-purple-200">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
+              Max Coverage Exam Set
+            </span>
+            {coverageMetric !== undefined && coverageMetric !== null && (
+              <span className="text-xs text-gray-600">
+                Coverage: {(coverageMetric * 100).toFixed(1)}%
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-600">
+            {totalExamsInSet ?? 1} exam{(totalExamsInSet ?? 1) !== 1 ? 's' : ''} in this set
+          </p>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-          <h3 className="text-base font-semibold text-gray-900 mb-1">
-            {getQuestionName(question.question_text)}
-          </h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-base font-semibold text-gray-900">
+              {isMockExam 
+                ? (examType === 'max_coverage' 
+                    ? `Mock Exam ${(examIndex ?? 0) + 1} of ${totalExamsInSet ?? 1}`
+                    : 'Mock Exam')
+                : getQuestionName(question.question_text)}
+            </h3>
+            {isMockExam && (
+              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                Mock Exam
+              </span>
+            )}
+          </div>
           {!expanded ? (
             <>
               <p className="text-sm text-gray-600 mb-2">
@@ -273,12 +468,37 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
           ) : (
             <div className="mt-2">
               <div className="text-sm text-gray-700 whitespace-pre-wrap mb-3">
-                {question.question_text}
+                <LatexRenderer content={question.question_text} />
               </div>
-              {question.solution && (
+              {question.solution && !isMockExam && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <h4 className="text-sm font-semibold text-gray-900 mb-2">Solution</h4>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{question.solution}</p>
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                    <LatexRenderer content={question.solution} />
+                  </div>
+                </div>
+              )}
+              {/* Page references */}
+              {pageReferences.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Page References</h4>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    {pageReferences.map((ref, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span>
+                          {ref.source_file || 'unknown'} (page {ref.page ?? '?'})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Coverage metric for mock exams */}
+              {isMockExam && coverageMetric !== undefined && coverageMetric !== null && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-600">
+                    Coverage: <span className="font-semibold">{(coverageMetric * 100).toFixed(1)}%</span>
+                  </p>
                 </div>
               )}
               <span className="text-xs text-gray-500 mt-3 block">
@@ -311,42 +531,12 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    onDownload(question.id, 'txt')
-                    setMenuOpen(false)
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                >
-                  Download TXT
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDownload(question.id, 'pdf')
+                    onDownload(question.id)
                     setMenuOpen(false)
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
                 >
                   Download PDF
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDownload(question.id, 'docx')
-                    setMenuOpen(false)
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                >
-                  Download DOCX
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDownload(question.id, 'json')
-                    setMenuOpen(false)
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                >
-                  Download JSON
                 </button>
               </div>
               <button

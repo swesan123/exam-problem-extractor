@@ -26,6 +26,9 @@ class ClassUpdate(BaseModel):
         None, max_length=1000, description="Class description"
     )
     subject: Optional[str] = Field(None, max_length=100, description="Subject area")
+    exam_format: Optional[str] = Field(
+        None, description="Exam format template (e.g., '5 multiple choice, 3 short answer')"
+    )
 
 
 class ClassResponse(BaseModel):
@@ -35,6 +38,7 @@ class ClassResponse(BaseModel):
     name: str = Field(..., description="Class name")
     description: Optional[str] = Field(None, description="Class description")
     subject: Optional[str] = Field(None, description="Subject area")
+    exam_format: Optional[str] = Field(None, description="Exam format template")
     question_count: int = Field(0, description="Number of questions in this class")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")

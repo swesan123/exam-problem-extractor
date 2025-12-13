@@ -19,6 +19,7 @@ class Class(Base):
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
     subject = Column(String, nullable=True, index=True)
+    exam_format = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
