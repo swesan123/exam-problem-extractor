@@ -26,26 +26,42 @@ class RetrievalService:
         self.embedding_service = embedding_service
         self.client = openai_client or embedding_service.client
 
-    def retrieve(self, query: str, top_k: int) -> List[RetrievedChunk]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int,
+        class_id: Optional[str] = None,
+        reference_type: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
         """
         Retrieve top_k similar chunks without scores.
 
         Args:
             query: Query text
             top_k: Number of results to retrieve
+            class_id: Optional class ID to filter by
+            reference_type: Optional reference type to filter by (e.g., assessment, lecture)
 
         Returns:
             List of RetrievedChunk objects
         """
-        return self.retrieve_with_scores(query, top_k)
+        return self.retrieve_with_scores(query, top_k, class_id, reference_type)
 
-    def retrieve_with_scores(self, query: str, top_k: int) -> List[RetrievedChunk]:
+    def retrieve_with_scores(
+        self,
+        query: str,
+        top_k: int,
+        class_id: Optional[str] = None,
+        reference_type: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
         """
         Retrieve top_k similar chunks with similarity scores.
 
         Args:
             query: Query text
             top_k: Number of results to retrieve
+            class_id: Optional class ID to filter by
+            reference_type: Optional reference type to filter by (e.g., assessment, lecture)
 
         Returns:
             List of RetrievedChunk objects sorted by score (descending)
@@ -63,13 +79,34 @@ class RetrievalService:
             # Generate query embedding
             query_embedding = self.embedding_service.generate_embedding(query)
 
+            # Build where clause for filtering
+            # ChromaDB requires using operators ($and, $or) when there are multiple conditions
+            where_clause = None
+            if class_id or reference_type:
+                if class_id and reference_type:
+                    # Multiple conditions need $and operator
+                    where_clause = {
+                        "$and": [
+                            {"class_id": class_id},
+                            {"reference_type": reference_type}
+                        ]
+                    }
+                elif class_id:
+                    where_clause = {"class_id": class_id}
+                elif reference_type:
+                    where_clause = {"reference_type": reference_type}
+
             # Perform similarity search
             collection = self.embedding_service.collection
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=top_k,
-                include=["documents", "metadatas", "distances"],
-            )
+            query_kwargs = {
+                "query_embeddings": [query_embedding],
+                "n_results": top_k,
+                "include": ["documents", "metadatas", "distances"],
+            }
+            if where_clause:
+                query_kwargs["where"] = where_clause
+
+            results = collection.query(**query_kwargs)
 
             # Convert to RetrievedChunk objects
             retrieved_chunks = []

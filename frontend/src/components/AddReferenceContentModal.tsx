@@ -22,6 +22,7 @@ const AddReferenceContentModal = ({
 }: AddReferenceContentModalProps) => {
   const [examSource, setExamSource] = useState('')
   const [examType, setExamType] = useState('')
+  const [referenceType, setReferenceType] = useState('')
   const [files, setFiles] = useState<FileWithStatus[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -147,7 +148,8 @@ const AddReferenceContentModal = ({
         classId,
         fileList,
         examSource || undefined,
-        examType || undefined
+        examType || undefined,
+        referenceType || undefined
       )
 
       setSuccess('Upload started! Processing in background...')
@@ -184,7 +186,7 @@ const AddReferenceContentModal = ({
           </button>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="exam_source" className="block text-sm font-medium text-gray-700 mb-1">
               Exam Source (Optional)
@@ -216,6 +218,28 @@ const AddReferenceContentModal = ({
               <option value="homework">Homework</option>
               <option value="other">Other</option>
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="reference_type" className="block text-sm font-medium text-gray-700 mb-1">
+              Reference Type (Optional)
+            </label>
+            <select
+              id="reference_type"
+              value={referenceType}
+              onChange={(e) => setReferenceType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select type...</option>
+              <option value="assessment">Assessment (structure/format)</option>
+              <option value="lecture">Lecture (content/topics)</option>
+              <option value="homework">Homework</option>
+              <option value="notes">Notes</option>
+              <option value="textbook">Textbook</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Assessment defines structure, Lecture defines content
+            </p>
           </div>
         </div>
 

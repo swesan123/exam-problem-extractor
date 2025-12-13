@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.db.database import SessionLocal
 from app.db.models import ReferenceUploadJob
 from app.services.embedding_service import EmbeddingService
 from app.services.ocr_service import OCRService
@@ -36,7 +37,11 @@ class ReferenceProcessor:
         self.embedding_semaphore = Semaphore(5)  # Limit concurrent embedding calls
 
     def process_job(
-        self, job_id: str, file_paths: List[Path], metadata: Dict, db: Session
+        self,
+        job_id: str,
+        file_info_list: List[tuple[Path, str]],
+        metadata: Dict,
+        db: Session,
     ) -> None:
         """
         Main processing coordinator.
@@ -44,8 +49,8 @@ class ReferenceProcessor:
 
         Args:
             job_id: Job ID
-            file_paths: List of file paths to process
-            metadata: Metadata dict with class_id, exam_source, exam_type
+            file_info_list: List of tuples (temp_path, original_filename) to process
+            metadata: Metadata dict with class_id, exam_source, exam_type, reference_type
             db: Database session
         """
         try:
@@ -60,37 +65,42 @@ class ReferenceProcessor:
                 return
 
             job.status = "processing"
-            job.total_files = len(file_paths)
+            job.total_files = len(file_info_list)
             job.file_statuses = {
-                str(path.name): {"status": "pending", "progress": 0}
-                for path in file_paths
+                original_filename: {"status": "pending", "progress": 0}
+                for _, original_filename in file_info_list
             }
             db.commit()
 
             # Process files in parallel
+            # Note: Each thread will create its own database session
             futures = []
-            for file_path in file_paths:
+            for file_path, original_filename in file_info_list:
                 future = self.executor.submit(
                     self._process_single_file,
                     job_id,
                     file_path,
+                    original_filename,
                     metadata,
-                    db,
                 )
-                futures.append((file_path.name, future))
+                futures.append((original_filename, future))
 
             # Wait for completion and update progress
+            # Each file processing thread handles its own status updates via its own session
             for filename, future in futures:
                 try:
                     result = future.result()  # Blocks until complete
-                    self._update_file_status(db, job_id, filename, "completed", 100)
-                    self._increment_processed_files(db, job_id)
+                    # Status updates are handled within _process_single_file using its own session
                 except Exception as e:
                     logger.error(
                         f"Failed to process file {filename}: {e}", exc_info=True
                     )
-                    self._update_file_status(db, job_id, filename, "failed", 0, str(e))
-                    self._increment_failed_files(db, job_id)
+                    # Update status using main session for final error state
+                    try:
+                        self._update_file_status(db, job_id, filename, "failed", 0, str(e))
+                        self._increment_failed_files(db, job_id)
+                    except Exception as db_error:
+                        logger.error(f"Failed to update error status in database: {db_error}")
 
             # Mark job as completed
             job = (
@@ -121,42 +131,72 @@ class ReferenceProcessor:
                 db.commit()
 
     def _process_single_file(
-        self, job_id: str, file_path: Path, metadata: Dict, db: Session
+        self,
+        job_id: str,
+        file_path: Path,
+        original_filename: str,
+        metadata: Dict,
     ) -> Dict:
         """
         Process a single file: OCR → Chunk → Embed → Store.
         Runs in parallel with other files.
+        Creates its own database session for thread safety.
 
         Args:
             job_id: Job ID
-            file_path: Path to file to process
-            metadata: Metadata dict with class_id, exam_source, exam_type
-            db: Database session
+            file_path: Path to temp file to process
+            original_filename: Original filename from upload
+            metadata: Metadata dict with class_id, exam_source, exam_type, reference_type
 
         Returns:
             Dict with success status and chunk count
         """
+        # Create a new database session for this thread
+        db = SessionLocal()
         try:
             # Step 1: OCR extraction (with rate limiting)
             with self.ocr_semaphore:
-                self._update_file_status(db, job_id, file_path.name, "processing", 10)
+                self._update_file_status(
+                    db, job_id, original_filename, "processing", 10
+                )
                 text = self._extract_text_ocr(file_path)
 
             # Step 2: Chunk text
-            self._update_file_status(db, job_id, file_path.name, "processing", 30)
+            self._update_file_status(db, job_id, original_filename, "processing", 30)
             chunks = smart_chunk(text, max_size=1000)
 
             # Step 3: Generate embeddings and store in ChromaDB (batch)
             with self.embedding_semaphore:
-                self._update_file_status(db, job_id, file_path.name, "processing", 60)
-                self._store_embeddings_batch(chunks, file_path, metadata)
-                self._update_file_status(db, job_id, file_path.name, "processing", 90)
+                self._update_file_status(
+                    db, job_id, original_filename, "processing", 60
+                )
+                self._store_embeddings_batch(
+                    chunks, file_path, original_filename, metadata
+                )
+                self._update_file_status(
+                    db, job_id, original_filename, "processing", 90
+                )
+            
+            # Mark as completed
+            self._update_file_status(db, job_id, original_filename, "completed", 100)
+            self._increment_processed_files(db, job_id)
 
             return {"success": True, "chunks": len(chunks)}
 
         except Exception as e:
-            logger.error(f"Failed to process {file_path.name}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to process {original_filename}: {e}", exc_info=True
+            )
+            # Update status to failed
+            try:
+                self._update_file_status(db, job_id, original_filename, "failed", 0, str(e))
+                self._increment_failed_files(db, job_id)
+            except Exception as db_error:
+                logger.error(f"Failed to update error status in database: {db_error}")
             raise
+        finally:
+            # Always close the session
+            db.close()
 
     def _extract_text_ocr(self, file_path: Path) -> str:
         """
@@ -189,15 +229,20 @@ class ReferenceProcessor:
             return ocr_service.extract_text(file_path)
 
     def _store_embeddings_batch(
-        self, chunks: List[str], file_path: Path, metadata: Dict
+        self,
+        chunks: List[str],
+        file_path: Path,
+        original_filename: str,
+        metadata: Dict,
     ) -> None:
         """
         Store embeddings in ChromaDB using optimized batch processing.
 
         Args:
             chunks: List of text chunks
-            file_path: Path to source file
-            metadata: Base metadata dict
+            file_path: Path to temp source file
+            original_filename: Original filename from upload
+            metadata: Base metadata dict (includes reference_type)
         """
         embedding_service = EmbeddingService()
 
@@ -205,8 +250,9 @@ class ReferenceProcessor:
         metadata_list = []
         for i, chunk in enumerate(chunks):
             chunk_metadata = metadata.copy()
-            chunk_metadata["chunk_id"] = f"{file_path.stem}_chunk_{i}"
-            chunk_metadata["source_file"] = file_path.name
+            # Use original filename stem for chunk_id, but original filename for source_file
+            chunk_metadata["chunk_id"] = f"{Path(original_filename).stem}_chunk_{i}"
+            chunk_metadata["source_file"] = original_filename
             metadata_list.append(chunk_metadata)
 
         # Use batch_store which generates embeddings in optimized batches internally

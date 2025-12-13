@@ -1,20 +1,42 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { classService } from '../services/classService'
 import { referenceContentService, ReferenceContentItem } from '../services/referenceContentService'
 import { Class } from '../types/class'
-import AddReferenceContentModal from '../components/AddReferenceContentModal'
-import { ReferenceUploadProgress } from '../components/ReferenceUploadProgress'
+import { jobService } from '../services/jobService'
+
+interface FileWithStatus {
+  file: File
+  status: 'pending' | 'processing' | 'success' | 'error'
+  progress?: number
+  error?: string
+  extractedText?: string
+}
 
 const ClassDetails = () => {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as { returnTo?: string })?.returnTo || '/classes'
   const [classItem, setClassItem] = useState<Class | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [referenceContent, setReferenceContent] = useState<ReferenceContentItem[]>([])
   const [loadingRefContent, setLoadingRefContent] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
   const [deletingChunkId, setDeletingChunkId] = useState<string | null>(null)
+  const [viewingFile, setViewingFile] = useState<string | null>(null)
+  
+  // Upload form state
+  const [name, setName] = useState('')
+  const [referenceType, setReferenceType] = useState('')
+  const [files, setFiles] = useState<FileWithStatus[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [processingFileCount, setProcessingFileCount] = useState(0)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const loadReferenceContent = async () => {
@@ -51,12 +73,13 @@ const ClassDetails = () => {
     loadReferenceContent()
   }, [id])
 
-  const handleDeleteReferenceContent = async (chunkId: string) => {
-    if (!confirm('Are you sure you want to delete this reference content?')) return
+  const handleDeleteReferenceContent = async (filename: string, chunks: ReferenceContentItem[]) => {
+    if (!confirm(`Are you sure you want to delete all content from "${filename}"?`)) return
 
     try {
-      setDeletingChunkId(chunkId)
-      await referenceContentService.delete(chunkId)
+      setDeletingChunkId(filename)
+      // Delete all chunks for this file
+      await Promise.all(chunks.map(chunk => referenceContentService.delete(chunk.chunk_id)))
       // Reload reference content
       if (id) {
         const response = await referenceContentService.getByClass(id)
@@ -83,6 +106,167 @@ const ClassDetails = () => {
     }
   }
 
+  const isValidFile = (file: File): boolean => {
+    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+    const validPdfType = 'application/pdf'
+    return validImageTypes.includes(file.type) || file.type === validPdfType
+  }
+
+  const handleFiles = useCallback((fileList: FileList | File[]) => {
+    const newFiles: FileWithStatus[] = []
+    const filesArray = Array.from(fileList)
+
+    filesArray.forEach((file) => {
+      if (!isValidFile(file)) {
+        setUploadError(`Invalid file type: ${file.name}. Please upload images (PNG, JPG, JPEG) or PDFs.`)
+        return
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError(`File too large: ${file.name}. Maximum size is 10MB.`)
+        return
+      }
+      newFiles.push({
+        file,
+        status: 'pending',
+      })
+    })
+
+    if (newFiles.length > 0) {
+      setFiles((prev) => [...prev, ...newFiles])
+      setUploadError(null)
+    }
+  }, [])
+
+  // Handle paste from clipboard
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      const imageFiles: File[] = []
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile()
+          if (blob) {
+            const file = new File([blob], `pasted-image-${Date.now()}.png`, {
+              type: blob.type,
+            })
+            imageFiles.push(file)
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault()
+        handleFiles(imageFiles)
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => {
+      window.removeEventListener('paste', handlePaste)
+    }
+  }, [handleFiles])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragging(false)
+
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files)
+      }
+    },
+    [handleFiles]
+  )
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleFiles(e.target.files)
+      }
+    },
+    [handleFiles]
+  )
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleProcessAll = async () => {
+    if (!id) return
+    if (files.length === 0) {
+      setUploadError('Please add at least one file')
+      return
+    }
+
+    // Calculate estimated time based on file sizes
+    const estimateSeconds = () => {
+      if (files.length === 0) return 5
+      const totalSizeMb = files.reduce((sum, f) => sum + f.file.size / (1024 * 1024), 0)
+      const avgSizeMb = totalSizeMb / files.length
+      // Base time per file + size-based time
+      return Math.max(10, Math.round(files.length * (6 + avgSizeMb * 3)))
+    }
+    const etaSeconds = estimateSeconds()
+    setEstimatedTime(`~${etaSeconds} sec`)
+    setProcessingFileCount(files.length)
+
+    setProcessing(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+
+    try {
+      const fileList = files.map((f) => f.file)
+      await jobService.uploadReferenceContent(
+        id,
+        fileList,
+        name || undefined,
+        undefined, // examType removed
+        referenceType || undefined
+      )
+
+      setUploadSuccess('Upload started! Processing in background...')
+      
+      // Reset form (but keep estimatedTime and processing state for now)
+      setName('')
+      setReferenceType('')
+      setFiles([])
+      
+      // Reload reference content after a short delay
+      setTimeout(() => {
+        handleAddSuccess()
+        // Keep processing state and estimate visible for a bit longer
+        // since actual processing happens in background
+        setTimeout(() => {
+          setProcessing(false)
+          setEstimatedTime(null)
+          setProcessingFileCount(0)
+        }, 3000) // Clear after 3 more seconds to show estimate
+      }, 1000)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to upload files')
+      setProcessing(false)
+      setEstimatedTime(null)
+      setProcessingFileCount(0)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -95,21 +279,25 @@ const ClassDetails = () => {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-800">Error: {error || 'Class not found'}</p>
-        <Link to="/classes" className="mt-2 inline-block text-blue-600 hover:text-blue-800">
-          Back to Classes
-        </Link>
+        <button
+          onClick={() => navigate(returnTo)}
+          className="mt-2 inline-block text-blue-600 hover:text-blue-800"
+        >
+          Back
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
-      <Link
-        to="/classes"
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="px-4 py-6 sm:px-0 flex-1 overflow-y-auto">
+      <button
+        onClick={() => navigate(returnTo)}
         className="text-blue-600 hover:text-blue-800 mb-4 inline-block"
       >
-        ← Back to Classes
-      </Link>
+        ← Back
+      </button>
 
       <div className="bg-white rounded-lg shadow p-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">{classItem.name}</h1>
@@ -128,88 +316,129 @@ const ClassDetails = () => {
           </div>
         )}
 
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <div className="text-sm text-gray-600">
-              <p>Created: {new Date(classItem.created_at).toLocaleDateString()}</p>
-              <p>Updated: {new Date(classItem.updated_at).toLocaleDateString()}</p>
-              <p className="mt-2">Questions: {classItem.question_count || 0}</p>
-            </div>
-            <Link
-              to={`/classes/${classItem.id}/questions`}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              View Questions ({classItem.question_count || 0})
-            </Link>
-          </div>
-        </div>
-
         {/* Reference Content Section */}
         <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Reference Content ({referenceContent.length})
-            </h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-            >
-              Add Reference Content
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            Reference Content ({referenceContent.length})
+          </h2>
 
-          {loadingRefContent ? (
-            <div className="text-center py-4 text-gray-600">Loading reference content...</div>
-          ) : referenceContent.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-gray-600 mb-4">No reference content yet.</p>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Add Reference Content
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {referenceContent.map((item) => (
-                <div
-                  key={item.chunk_id}
-                  className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition"
+          {/* Upload Form */}
+          <div className="mb-6 bg-gray-50 rounded-lg p-6 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Reference Content</h3>
+            
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., '2023 Final Exam', 'Practice Test 1'"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="reference_type" className="block text-sm font-medium text-gray-700 mb-1">
+                  Reference Type
+                </label>
+                <select
+                  id="reference_type"
+                  value={referenceType}
+                  onChange={(e) => setReferenceType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-2">
-                        {item.metadata.source && (
-                          <span className="text-sm font-medium text-gray-900">
-                            {item.metadata.source}
-                          </span>
-                        )}
-                        {item.metadata.exam_type && (
-                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                            {item.metadata.exam_type}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-700 line-clamp-2">
-                        {item.text.substring(0, 200)}
-                        {item.text.length > 200 ? '...' : ''}
-                      </p>
-                      {item.metadata.timestamp && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          Added: {new Date(item.metadata.timestamp).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteReferenceContent(item.chunk_id)}
-                      disabled={deletingChunkId === item.chunk_id}
-                      className="ml-4 text-red-600 hover:text-red-800 disabled:opacity-50"
-                      title="Delete reference content"
+                  <option value="">Select type...</option>
+                  <option value="assessment">Assessment (structure/format)</option>
+                  <option value="lecture">Lecture (content/topics)</option>
+                  <option value="homework">Homework</option>
+                  <option value="notes">Notes</option>
+                  <option value="textbook">Textbook</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Assessment defines structure, Lecture defines content
+                </p>
+              </div>
+            </div>
+
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
+                isDragging
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-300 bg-white hover:border-gray-400'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                id="file-input"
+                multiple
+                accept="image/*,.pdf"
+                onChange={handleFileInput}
+                className="hidden"
+              />
+              <label
+                htmlFor="file-input"
+                className="cursor-pointer flex flex-col items-center"
+              >
+                <svg
+                  className="w-12 h-12 text-gray-400 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <p className="text-gray-600 mb-2">
+                  <span className="text-blue-600 font-medium">Click to upload</span>, drag and drop, or{' '}
+                  <span className="text-blue-600 font-medium">paste from clipboard</span>
+                </p>
+                <p className="text-sm text-gray-500">
+                  Images (PNG, JPG, JPEG) or PDFs (max 10MB each)
+                </p>
+              </label>
+            </div>
+
+            {files.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">
+                  Files ({files.length})
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {files.map((fileWithStatus, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200"
                     >
-                      {deletingChunkId === item.chunk_id ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
-                      ) : (
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {fileWithStatus.file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {(fileWithStatus.file.size / 1024).toFixed(1)} KB
+                          </p>
+                          {fileWithStatus.error && (
+                            <p className="text-xs text-red-600 mt-1">{fileWithStatus.error}</p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="ml-3 text-red-600 hover:text-red-800"
+                        title="Remove file"
+                      >
                         <svg
                           className="w-5 h-5"
                           fill="none"
@@ -220,28 +449,173 @@ const ClassDetails = () => {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            d="M6 18L18 6M6 6l12 12"
                           />
                         </svg>
-                      )}
-                    </button>
-                  </div>
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {uploadError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+                {uploadError}
+              </div>
+            )}
+
+            {uploadSuccess && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-sm">
+                {uploadSuccess}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={handleProcessAll}
+                disabled={processing || files.length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processing
+                  ? `Processing ${processingFileCount} file(s)...${estimatedTime ? ` (${estimatedTime})` : ''}`
+                  : `Process and Store ${files.length} File(s)`}
+              </button>
             </div>
-          )}
+            {estimatedTime && !processing && (
+              <p className="mt-2 text-xs text-gray-500 text-right">Estimated time: {estimatedTime}</p>
+            )}
+          </div>
+
+          {/* Reference Content List */}
+          {loadingRefContent ? (
+            <div className="text-center py-4 text-gray-600">Loading reference content...</div>
+          ) : referenceContent.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-600">No reference content yet.</p>
+            </div>
+          ) : (() => {
+            // Group chunks by filename (source_file or original_filename)
+            const groupedByFile = referenceContent.reduce((acc, item) => {
+              const filename = item.metadata.original_filename || item.metadata.source_file || item.metadata.source || 'Unknown File'
+              if (!acc[filename]) {
+                acc[filename] = []
+              }
+              acc[filename].push(item)
+              return acc
+            }, {} as Record<string, ReferenceContentItem[]>)
+
+            // Also group by exam_source if available to show user-provided names
+            const groupedBySource = referenceContent.reduce((acc, item) => {
+              const sourceName = item.metadata.exam_source
+              const filename = item.metadata.original_filename || item.metadata.source_file || item.metadata.source || 'Unknown File'
+              // Use exam_source as key if available, otherwise use filename
+              const key = sourceName || filename
+              if (!acc[key]) {
+                acc[key] = {
+                  items: [],
+                  displayName: sourceName || filename,
+                  filename: filename,
+                  referenceType: item.metadata.reference_type
+                }
+              }
+              acc[key].items.push(item)
+              return acc
+            }, {} as Record<string, { items: ReferenceContentItem[], displayName: string, filename: string, referenceType?: string }>)
+
+            return (
+              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                {Object.entries(groupedBySource).map(([key, group]) => {
+                  const chunks = group.items
+                  const displayName = group.displayName
+                  const filename = group.filename
+                  const referenceType = group.referenceType
+                  
+                  return (
+                    <div
+                      key={key}
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-3 mb-1">
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {displayName}
+                            </span>
+                            {referenceType && (
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded whitespace-nowrap">
+                                {referenceType}
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-500 whitespace-nowrap">
+                              {chunks.length} chunk{chunks.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          {displayName !== filename && (
+                            <p className="text-xs text-gray-400 mt-0.5 truncate">
+                              {filename}
+                            </p>
+                          )}
+                          {chunks[0]?.metadata.timestamp && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Added: {new Date(chunks[0].metadata.timestamp).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 ml-4">
+                          <button
+                            onClick={() => setViewingFile(viewingFile === key ? null : key)}
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                          >
+                            {viewingFile === key ? 'Hide' : 'View'} Content
+                          </button>
+                          <button
+                            onClick={() => handleDeleteReferenceContent(filename, chunks)}
+                            disabled={deletingChunkId === filename}
+                            className="p-1.5 text-red-600 hover:text-red-800 disabled:opacity-50"
+                            title="Delete file"
+                          >
+                            {deletingChunkId === filename ? (
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                            ) : (
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      {viewingFile === key && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {chunks.map((chunk, idx) => (
+                              <div key={chunk.chunk_id} className="bg-white rounded p-3 border border-gray-200">
+                                <div className="text-xs text-gray-500 mb-1">Chunk {idx + 1}</div>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{chunk.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       </div>
-
-      {showAddModal && id && (
-        <AddReferenceContentModal
-          classId={id}
-          onClose={() => setShowAddModal(false)}
-          onSuccess={handleAddSuccess}
-        />
-      )}
-
-      {id && <ReferenceUploadProgress classId={id} onJobComplete={handleAddSuccess} />}
+      </div>
     </div>
   )
 }

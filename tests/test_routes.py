@@ -208,7 +208,8 @@ def test_generate_endpoint_with_class_id(
     # Mock service instantiation to avoid ChromaDB conflicts
     mock_embedding_service = mocker.MagicMock()
     mock_retrieval_service = mocker.MagicMock()
-    mock_retrieval_service.retrieve.return_value = []
+    # Mock retrieve_with_scores to return empty chunks (will use generate_with_reference_types with empty chunks)
+    mock_retrieval_service.retrieve_with_scores.return_value = []
     mocker.patch(
         "app.routes.generate.EmbeddingService", return_value=mock_embedding_service
     )
@@ -220,12 +221,15 @@ def test_generate_endpoint_with_class_id(
     mocker.patch(
         "app.services.ocr_service.OCRService.extract_text", return_value="Test OCR text"
     )
+    # When class_id is provided but both chunks are empty, it falls back to generate_with_metadata
+    # Need to patch the instance method, not the class method
+    mock_gen_service = mocker.MagicMock()
+    mock_gen_service.generate_with_metadata.return_value = {
+        "question": "Generated question text",
+        "metadata": {"model": "gpt-4", "tokens_used": 100},
+    }
     mocker.patch(
-        "app.services.generation_service.GenerationService.generate_with_metadata",
-        return_value={
-            "question": "Generated question text",
-            "metadata": {"model": "gpt-4", "tokens_used": 100},
-        },
+        "app.routes.generate.GenerationService", return_value=mock_gen_service
     )
 
     response = client.post(
@@ -295,7 +299,8 @@ def test_generate_endpoint_invalid_class_id(client: TestClient, mocker):
     # Mock service instantiation to avoid ChromaDB conflicts
     mock_embedding_service = mocker.MagicMock()
     mock_retrieval_service = mocker.MagicMock()
-    mock_retrieval_service.retrieve.return_value = []
+    # Mock retrieve_with_scores to return empty chunks
+    mock_retrieval_service.retrieve_with_scores.return_value = []
     mocker.patch(
         "app.routes.generate.EmbeddingService", return_value=mock_embedding_service
     )
@@ -307,12 +312,15 @@ def test_generate_endpoint_invalid_class_id(client: TestClient, mocker):
     mocker.patch(
         "app.services.ocr_service.OCRService.extract_text", return_value="Test OCR text"
     )
+    # When class_id is provided but both chunks are empty, it falls back to generate_with_metadata
+    # Need to patch the instance method, not the class method
+    mock_gen_service = mocker.MagicMock()
+    mock_gen_service.generate_with_metadata.return_value = {
+        "question": "Generated question text",
+        "metadata": {"model": "gpt-4", "tokens_used": 100},
+    }
     mocker.patch(
-        "app.services.generation_service.GenerationService.generate_with_metadata",
-        return_value={
-            "question": "Generated question text",
-            "metadata": {"model": "gpt-4", "tokens_used": 100},
-        },
+        "app.routes.generate.GenerationService", return_value=mock_gen_service
     )
 
     response = client.post(

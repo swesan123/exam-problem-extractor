@@ -70,6 +70,12 @@ class Settings(BaseSettings):
         default=60,
         description="Request timeout in seconds",
     )
+    min_similarity_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity score threshold for using retrieved references",
+    )
 
     # Security
     cors_origins: str = Field(
