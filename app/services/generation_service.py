@@ -986,7 +986,6 @@ Each question must be clearly numbered (1., 2., 3., etc.) and separated from oth
             "region_weights": {"pre": 1.0, "post": 1.0},
         }
 
->>>>>>> origin/main
     def _split_exam_into_questions(self, exam_content: str) -> List[str]:
         """
         Split exam content into individual questions.

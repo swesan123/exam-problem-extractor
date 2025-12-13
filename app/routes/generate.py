@@ -215,8 +215,6 @@ async def generate_question(
                 # For other modes, use standard retrieval
                 top_k_assessment = 20 if mode == "mock_exam" else 3
                 top_k_lecture = 20 if mode == "mock_exam" else 3
-<<<<<<< HEAD
-                
                 
                 # Retrieve assessment references separately (for structure/format)
                 # Pass weighting_rules if available (for mock_exam mode)
@@ -302,6 +300,42 @@ async def generate_question(
         # Initialize generation service if not already done (for normal mode)
         if mode != "mock_exam":
             generation_service = GenerationService()
+        
+<<<<<<< HEAD
+        # Parse weighting_rules if provided (for mock_exam mode)
+        parsed_weighting_rules = None
+        if mode == "mock_exam" and weighting_rules:
+            try:
+                parsed_weighting_rules = json.loads(weighting_rules)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="weighting_rules must be valid JSON",
+                )
+        
+        # Generate default weighting rules if not provided (for mock_exam mode)
+        # Note: This assumes Agent 2 has added _infer_weighting_rules method
+        default_weighting_rules = None
+        if mode == "mock_exam" and hasattr(generation_service, '_infer_weighting_rules'):
+            # Get exam_type from class if available
+            exam_type = None
+            if class_id:
+                from app.services.class_service import ClassService
+                class_service = ClassService(db)
+                class_obj = class_service.get_class(class_id)
+                if class_obj:
+                    # Try to get exam_type from class metadata or exam_format
+                    exam_type = getattr(class_obj, 'exam_type', None)
+            
+            default_weighting_rules = generation_service._infer_weighting_rules(
+                exam_format, exam_type
+            )
+        
+        # Merge default and provided weighting rules (provided takes precedence)
+        if mode == "mock_exam":
+            final_weighting_rules = default_weighting_rules or {}
+            if parsed_weighting_rules:
+                final_weighting_rules.update(parsed_weighting_rules)
         
         # Route to appropriate generation method based on mode
         all_exams = []  # Initialize for use in saving logic

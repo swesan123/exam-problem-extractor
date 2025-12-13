@@ -135,20 +135,6 @@ class GenerateResponse(BaseModel):
             raise ValueError("Either 'question' or 'questions' must be provided")
         return self
 
-    @model_validator(mode="after")
-    def validate_question_or_questions(self):
-        """Ensure either question or questions is provided."""
-        if not self.question and not self.questions:
-            raise ValueError("Either 'question' or 'questions' must be provided")
-        return self
-
-    @model_validator(mode="after")
-    def validate_question_or_questions(self):
-        """Ensure either question or questions is provided."""
-        if not self.question and not self.questions:
-            raise ValueError("Either 'question' or 'questions' must be provided")
-        return self
-
     model_config = {
         "json_schema_extra": {
             "example": {
