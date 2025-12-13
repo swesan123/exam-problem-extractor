@@ -69,7 +69,26 @@ async def generate_question(
             validate_upload_file(image_file)
             temp_path = save_temp_file(image_file)
             ocr_service = OCRService()
-            ocr_text = ocr_service.extract_text(temp_path)
+            
+            # Handle PDF by converting pages to images first
+            if image_file.content_type == "application/pdf":
+                from app.utils.file_utils import convert_pdf_to_images
+                image_paths = convert_pdf_to_images(temp_path)
+                all_text_parts = []
+                try:
+                    for page_num, image_path in enumerate(image_paths, start=1):
+                        text = ocr_service.extract_text(image_path)
+                        page_header = f"=== Page {page_num} ===\n"
+                        all_text_parts.append(page_header + text)
+                    ocr_text = "\n\n".join(all_text_parts)
+                finally:
+                    # Clean up generated images
+                    for img_path in image_paths:
+                        cleanup_temp_file(img_path)
+            else:
+                # Handle regular image files
+                ocr_text = ocr_service.extract_text(temp_path)
+            
             processing_steps.append("ocr")
 
         if not ocr_text:
