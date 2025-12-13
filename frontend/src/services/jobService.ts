@@ -46,12 +46,14 @@ export const jobService = {
     classId: string,
     files: File[],
     examSource?: string,
-    examType?: string
+    examType?: string,
+    referenceType?: string
   ): Promise<UploadJobResponse> {
     const formData = new FormData()
     formData.append('class_id', classId)
     if (examSource) formData.append('exam_source', examSource)
     if (examType) formData.append('exam_type', examType)
+    if (referenceType) formData.append('reference_type', referenceType)
     
     files.forEach((file) => {
       formData.append('files', file)

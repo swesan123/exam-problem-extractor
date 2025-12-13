@@ -1,6 +1,6 @@
 """Pydantic models for generation endpoint."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import UploadFile
 from pydantic import BaseModel, Field, model_validator
@@ -47,6 +47,30 @@ class GenerateRequest(BaseModel):
     }
 
 
+class ReferenceCitation(BaseModel):
+    """Citation for a reference used in question generation."""
+
+    source_file: str = Field(..., description="Original filename of the reference")
+    chunk_id: str = Field(..., description="Chunk ID of the reference")
+    reference_type: str = Field(
+        ..., description="Type of reference (e.g., assessment, lecture)"
+    )
+    score: float = Field(
+        ..., ge=0.0, le=1.0, description="Similarity score of the reference"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "source_file": "midterm_2023.pdf",
+                "chunk_id": "midterm_2023_chunk_0",
+                "reference_type": "assessment",
+                "score": 0.87,
+            }
+        }
+    }
+
+
 class GenerateResponse(BaseModel):
     """Response model for generation endpoint."""
 
@@ -61,6 +85,10 @@ class GenerateResponse(BaseModel):
     class_id: Optional[str] = Field(
         None, description="ID of class question was saved to (if provided)"
     )
+    references_used: Dict[str, List[ReferenceCitation]] = Field(
+        default_factory=dict,
+        description="References used for generation (assessment and lecture)",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -72,6 +100,24 @@ class GenerateResponse(BaseModel):
                     "retrieved_count": 5,
                 },
                 "processing_steps": ["ocr", "retrieval", "generation"],
+                "references_used": {
+                    "assessment": [
+                        {
+                            "source_file": "midterm_2023.pdf",
+                            "chunk_id": "midterm_2023_chunk_0",
+                            "reference_type": "assessment",
+                            "score": 0.87,
+                        }
+                    ],
+                    "lecture": [
+                        {
+                            "source_file": "lecture_5.pdf",
+                            "chunk_id": "lecture_5_chunk_2",
+                            "reference_type": "lecture",
+                            "score": 0.82,
+                        }
+                    ],
+                },
             }
         }
     }

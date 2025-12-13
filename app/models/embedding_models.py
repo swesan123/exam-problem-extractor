@@ -22,6 +22,10 @@ class EmbeddingMetadata(BaseModel):
     exam_type: Optional[str] = Field(
         None, description="Type of exam (e.g., midterm, final, practice)"
     )
+    reference_type: Optional[str] = Field(
+        None,
+        description="Type of reference (e.g., assessment, lecture, homework, notes, textbook). Assessment types define structure/format, lecture types define content.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -32,6 +36,7 @@ class EmbeddingMetadata(BaseModel):
                 "timestamp": "2023-01-01T00:00:00Z",
                 "class_id": "class_abc123",
                 "exam_type": "midterm",
+                "reference_type": "assessment",
             }
         }
     }

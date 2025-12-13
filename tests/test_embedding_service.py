@@ -235,3 +235,119 @@ def test_batch_store_filters_none_values(mock_openai_client, mock_chromadb):
     assert "exam_type" not in stored_metadata_list[1]
     assert stored_metadata_list[1]["exam_source"] == "test_source"
     assert stored_metadata_list[1]["chunk_id"] == "chunk_2"
+
+
+def test_batch_store_preserves_reference_type_and_source_file(
+    mock_openai_client, mock_chromadb
+):
+    """Test that batch_store preserves reference_type and source_file metadata."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+
+    texts = ["text 1", "text 2"]
+    metadata_list = [
+        {
+            "chunk_id": "chunk_1",
+            "class_id": "class_1",
+            "reference_type": "assessment",
+            "source_file": "exam_2024.pdf",
+        },
+        {
+            "chunk_id": "chunk_2",
+            "class_id": "class_1",
+            "reference_type": "lecture",
+            "source_file": "lecture_notes.pdf",
+        },
+    ]
+
+    chunk_ids = service.batch_store(texts, metadata_list)
+
+    assert len(chunk_ids) == 2
+    mock_collection.add.assert_called_once()
+
+    # Verify that reference_type and source_file are preserved
+    call_args = mock_collection.add.call_args
+    stored_metadata_list = call_args.kwargs["metadatas"]
+
+    assert stored_metadata_list[0]["reference_type"] == "assessment"
+    assert stored_metadata_list[0]["source_file"] == "exam_2024.pdf"
+    assert stored_metadata_list[1]["reference_type"] == "lecture"
+    assert stored_metadata_list[1]["source_file"] == "lecture_notes.pdf"
+
+
+def test_batch_store_filters_none_but_preserves_reference_type(
+    mock_openai_client, mock_chromadb
+):
+    """Test that None values are filtered but reference_type is preserved."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+
+    texts = ["text 1"]
+    metadata_list = [
+        {
+            "chunk_id": "chunk_1",
+            "class_id": "class_1",
+            "reference_type": "assessment",
+            "source_file": "test.pdf",
+            "exam_source": None,  # Should be filtered
+            "exam_type": None,  # Should be filtered
+        },
+    ]
+
+    chunk_ids = service.batch_store(texts, metadata_list)
+
+    assert len(chunk_ids) == 1
+    mock_collection.add.assert_called_once()
+
+    call_args = mock_collection.add.call_args
+    stored_metadata_list = call_args.kwargs["metadatas"]
+
+    # None values should be filtered out
+    assert "exam_source" not in stored_metadata_list[0]
+    assert "exam_type" not in stored_metadata_list[0]
+
+    # reference_type and source_file should be preserved
+    assert stored_metadata_list[0]["reference_type"] == "assessment"
+    assert stored_metadata_list[0]["source_file"] == "test.pdf"
+
+
+def test_list_embeddings_by_class_returns_reference_type_and_source_file(
+    mock_openai_client, mock_chromadb
+):
+    """Test that list_embeddings_by_class returns items with reference_type and source_file."""
+    mock_client, mock_collection = mock_chromadb
+    service = EmbeddingService(
+        openai_client=mock_openai_client, vector_db_client=mock_client
+    )
+
+    # Mock collection.get to return data with reference_type and source_file
+    mock_collection.get.return_value = {
+        "ids": ["chunk_1", "chunk_2"],
+        "documents": ["Text 1", "Text 2"],
+        "metadatas": [
+            {
+                "source": "test",
+                "class_id": "class_1",
+                "reference_type": "assessment",
+                "source_file": "exam_1.pdf",
+            },
+            {
+                "source": "test",
+                "class_id": "class_1",
+                "reference_type": "lecture",
+                "source_file": "lecture_1.pdf",
+            },
+        ],
+    }
+
+    results = service.list_embeddings_by_class("class_1")
+
+    assert len(results) == 2
+    assert results[0]["metadata"]["reference_type"] == "assessment"
+    assert results[0]["metadata"]["source_file"] == "exam_1.pdf"
+    assert results[1]["metadata"]["reference_type"] == "lecture"
+    assert results[1]["metadata"]["source_file"] == "lecture_1.pdf"

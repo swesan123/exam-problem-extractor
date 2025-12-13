@@ -10,6 +10,8 @@ export interface ReferenceContentItem {
     page?: number
     chunk_id?: string
     timestamp?: string
+    reference_type?: string
+    source_file?: string
   }
 }
 

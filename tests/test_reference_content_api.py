@@ -168,3 +168,261 @@ class TestDeleteReferenceContent:
 
         assert response.status_code == 500
         assert "Failed to delete reference content" in response.json()["detail"]
+
+
+class TestUploadReferenceContent:
+    """Test uploading reference content with reference_type."""
+
+    @pytest.fixture
+    def sample_file(self):
+        """Create a sample file for upload."""
+        from io import BytesIO
+        return ("test.pdf", BytesIO(b"fake pdf content"), "application/pdf")
+
+    @pytest.fixture
+    def mock_reference_processor(self):
+        """Create a mock reference processor."""
+        with patch("app.api.reference_content._processor") as mock_processor:
+            yield mock_processor
+
+    @pytest.fixture
+    def mock_job_service(self):
+        """Create a mock job service."""
+        with patch("app.api.reference_content.JobService") as mock_service_class:
+            mock_service = MagicMock()
+            mock_job = MagicMock()
+            mock_job.id = "job_123"
+            mock_job.status = "pending"
+            mock_service.create_job.return_value = mock_job
+            mock_service_class.return_value = mock_service
+            yield mock_service
+
+    def test_upload_with_reference_type_assessment(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with reference_type='assessment'."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert "job_id" in data
+        assert data["status"] == "pending"
+
+        # Verify processor was called with reference_type in metadata
+        mock_reference_processor.process_job.assert_called_once()
+        call_args = mock_reference_processor.process_job.call_args
+        metadata = call_args[0][2]  # Third positional argument
+        assert metadata["reference_type"] == "assessment"
+        assert metadata["class_id"] == "class_1"
+
+    def test_upload_with_reference_type_lecture(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with reference_type='lecture'."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "lecture",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        # Verify processor was called with reference_type in metadata
+        call_args = mock_reference_processor.process_job.call_args
+        metadata = call_args[0][2]
+        assert metadata["reference_type"] == "lecture"
+
+    def test_upload_with_custom_reference_type(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with custom reference_type."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "homework",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        call_args = mock_reference_processor.process_job.call_args
+        metadata = call_args[0][2]
+        assert metadata["reference_type"] == "homework"
+
+    def test_upload_without_reference_type(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test upload without reference_type (backward compatibility)."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        call_args = mock_reference_processor.process_job.call_args
+        metadata = call_args[0][2]
+        # reference_type should be None if not provided
+        assert metadata.get("reference_type") is None
+
+    def test_original_filename_preserved_in_metadata(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test original filename preserved in metadata."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        # Verify file_info_list contains original filename
+        call_args = mock_reference_processor.process_job.call_args
+        file_info_list = call_args[0][1]  # Second positional argument
+        assert len(file_info_list) == 1
+        assert file_info_list[0][1] == "test.pdf"  # Original filename
+
+    def test_multiple_files_with_same_reference_type(
+        self, client, sample_class, mock_reference_processor, mock_job_service
+    ):
+        """Test multiple files with same reference_type."""
+        from io import BytesIO
+        files = [
+            ("file1.pdf", BytesIO(b"content1"), "application/pdf"),
+            ("file2.pdf", BytesIO(b"content2"), "application/pdf"),
+        ]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", f) for f in files],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        call_args = mock_reference_processor.process_job.call_args
+        metadata = call_args[0][2]
+        assert metadata["reference_type"] == "assessment"
+        file_info_list = call_args[0][1]
+        assert len(file_info_list) == 2
+
+    def test_job_creation_includes_reference_type(
+        self, client, sample_class, sample_file, mock_reference_processor, mock_job_service
+    ):
+        """Test job creation includes reference_type."""
+        files = [sample_file]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "lecture",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        # Job service should be called (already mocked)
+        assert mock_job_service.create_job.called
+
+    def test_upload_with_special_characters_in_filename(
+        self, client, sample_class, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with special characters in filename."""
+        from io import BytesIO
+        files = [("test file (2024).pdf", BytesIO(b"content"), "application/pdf")]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        call_args = mock_reference_processor.process_job.call_args
+        file_info_list = call_args[0][1]
+        assert file_info_list[0][1] == "test file (2024).pdf"
+
+    def test_upload_with_long_filename(
+        self, client, sample_class, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with long filename."""
+        from io import BytesIO
+        long_filename = "a" * 200 + ".pdf"
+        files = [(long_filename, BytesIO(b"content"), "application/pdf")]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        call_args = mock_reference_processor.process_job.call_args
+        file_info_list = call_args[0][1]
+        assert file_info_list[0][1] == long_filename
+
+    def test_upload_with_missing_filename_fallback(
+        self, client, sample_class, mock_reference_processor, mock_job_service
+    ):
+        """Test upload with missing filename (fallback)."""
+        from io import BytesIO
+        files = [("", BytesIO(b"content"), "application/pdf")]
+        data = {
+            "class_id": "class_1",
+            "reference_type": "assessment",
+        }
+
+        response = client.post(
+            "/api/reference-content/upload",
+            files=[("files", files[0])],
+            data=data,
+        )
+
+        assert response.status_code == 202
+        # Should still work, filename will be derived from temp file
+        call_args = mock_reference_processor.process_job.call_args
+        file_info_list = call_args[0][1]
+        assert len(file_info_list) == 1

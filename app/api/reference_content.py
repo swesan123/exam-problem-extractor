@@ -79,6 +79,7 @@ async def upload_reference_content(
     files: List[UploadFile] = File(...),
     exam_source: Optional[str] = Form(None),
     exam_type: Optional[str] = Form(None),
+    reference_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -89,6 +90,7 @@ async def upload_reference_content(
         files: List of files to upload
         exam_source: Optional exam source
         exam_type: Optional exam type
+        reference_type: Optional reference type (e.g., assessment, lecture, homework, notes, textbook)
         db: Database session
 
     Returns:
@@ -126,12 +128,13 @@ async def upload_reference_content(
             exam_type=exam_type,
         )
 
-        # Save files temporarily and start background processing
-        file_paths = []
+        # Save files temporarily and preserve original filenames
+        file_info_list = []  # List of tuples: (temp_path, original_filename)
         try:
             for file in files:
                 temp_path = save_temp_file(file)
-                file_paths.append(temp_path)
+                original_filename = file.filename or temp_path.name
+                file_info_list.append((temp_path, original_filename))
         except Exception as e:
             logger.error(f"Failed to save files: {e}", exc_info=True)
             raise HTTPException(
@@ -144,6 +147,7 @@ async def upload_reference_content(
             "class_id": class_id,
             "exam_source": exam_source,
             "exam_type": exam_type,
+            "reference_type": reference_type,
         }
 
         # Start background processing in a separate thread
@@ -153,7 +157,9 @@ async def upload_reference_content(
         def process_in_background():
             background_db = SessionLocal()
             try:
-                _processor.process_job(job.id, file_paths, metadata, background_db)
+                _processor.process_job(
+                    job.id, file_info_list, metadata, background_db
+                )
             except Exception as e:
                 logger.error(
                     f"Background processing failed for job {job.id}: {e}", exc_info=True

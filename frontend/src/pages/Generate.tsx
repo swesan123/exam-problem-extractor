@@ -395,6 +395,38 @@ const Generate = () => {
 
               <div className="text-xs text-gray-600">
                 <p>Processing steps: {result.processing_steps.join(', ')}</p>
+                
+                {result.references_used && 
+                 (result.references_used.assessment?.length || result.references_used.lecture?.length) && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <p className="font-semibold text-blue-900 mb-2">References Used:</p>
+                    {result.references_used.assessment && result.references_used.assessment.length > 0 && (
+                      <div className="mb-2">
+                        <p className="font-medium text-blue-800">Structure/Format (Assessment):</p>
+                        <ul className="list-disc list-inside ml-2 text-blue-700">
+                          {result.references_used.assessment.map((ref, idx) => (
+                            <li key={idx}>
+                              {ref.source_file} (score: {ref.score.toFixed(2)})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {result.references_used.lecture && result.references_used.lecture.length > 0 && (
+                      <div>
+                        <p className="font-medium text-blue-800">Content (Lecture):</p>
+                        <ul className="list-disc list-inside ml-2 text-blue-700">
+                          {result.references_used.lecture.map((ref, idx) => (
+                            <li key={idx}>
+                              {ref.source_file} (score: {ref.score.toFixed(2)})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 {result.metadata && Object.keys(result.metadata).length > 0 && (
                   <details className="mt-2">
                     <summary className="cursor-pointer">View metadata</summary>
