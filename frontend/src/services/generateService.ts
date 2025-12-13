@@ -10,6 +10,9 @@ export interface GenerateRequest {
   mode?: 'normal' | 'mock_exam'
   exam_format?: string
   max_coverage?: boolean
+  question_count?: number
+  weighting_rules?: string // JSON string
+  focus_on_uncertain?: boolean
 }
 
 export const generateService = {

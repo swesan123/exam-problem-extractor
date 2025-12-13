@@ -42,5 +42,21 @@ export const questionService = {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   },
+
+  async update(
+    questionId: string,
+    updates: {
+      slideset?: string
+      slide?: number
+      topic?: string
+      user_confidence?: 'confident' | 'uncertain' | 'not_confident'
+    }
+  ): Promise<Question> {
+    const response = await apiClient.patch<Question>(
+      `/api/questions/${questionId}`,
+      updates
+    )
+    return response.data
+  },
 }
 
