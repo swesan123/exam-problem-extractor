@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ReferenceUploadJob
 from app.services.embedding_service import EmbeddingService
+from app.services.metrics_service import MetricsService
 from app.services.ocr_service import OCRService
 from app.utils.chunking import smart_chunk
 from app.utils.file_utils import cleanup_temp_file, convert_pdf_to_images
@@ -136,20 +137,79 @@ class ReferenceProcessor:
         Returns:
             Dict with success status and chunk count
         """
+        metrics_service = MetricsService(db)
+        metrics_id = None
+
         try:
+            # Initialize metrics tracking
+            file_size_bytes = file_path.stat().st_size
+            file_type = self._get_file_type(file_path)
+            page_count = None
+            if file_path.suffix.lower() == ".pdf":
+                # For PDFs, try to count pages (optional dependency)
+                try:
+                    from PyPDF2 import PdfReader
+
+                    reader = PdfReader(str(file_path))
+                    page_count = len(reader.pages)
+                except ImportError:
+                    # PyPDF2 not installed, leave as None
+                    pass
+                except Exception:
+                    # Error reading PDF, leave as None
+                    pass
+
+            metrics = metrics_service.create_file_metrics(
+                job_id=job_id,
+                filename=file_path.name,
+                file_size_bytes=file_size_bytes,
+                file_type=file_type,
+                page_count=page_count,
+            )
+            metrics_id = metrics.id
+
+            # Record upload time (assume upload completed when processing starts)
+            upload_end_time = datetime.utcnow()
+            metrics_service.update_upload_times(
+                metrics_id, upload_end_time, upload_end_time
+            )
+
             # Step 1: OCR extraction (with rate limiting)
             with self.ocr_semaphore:
                 self._update_file_status(db, job_id, file_path.name, "processing", 10)
+                ocr_start = datetime.utcnow()
                 text = self._extract_text_ocr(file_path)
+                ocr_end = datetime.utcnow()
+                metrics_service.update_processing_step(
+                    metrics_id, "ocr", ocr_start, ocr_end
+                )
 
             # Step 2: Chunk text
             self._update_file_status(db, job_id, file_path.name, "processing", 30)
+            chunking_start = datetime.utcnow()
             chunks = smart_chunk(text, max_size=1000)
+            chunking_end = datetime.utcnow()
+            metrics_service.update_processing_step(
+                metrics_id, "chunking", chunking_start, chunking_end
+            )
 
             # Step 3: Generate embeddings and store in ChromaDB (batch)
             with self.embedding_semaphore:
                 self._update_file_status(db, job_id, file_path.name, "processing", 60)
+                embedding_start = datetime.utcnow()
                 self._store_embeddings_batch(chunks, file_path, metadata)
+                embedding_end = datetime.utcnow()
+                metrics_service.update_processing_step(
+                    metrics_id, "embedding", embedding_start, embedding_end
+                )
+
+                # Storage happens as part of embedding batch_store
+                storage_start = embedding_start
+                storage_end = embedding_end
+                metrics_service.update_processing_step(
+                    metrics_id, "storage", storage_start, storage_end
+                )
+
                 self._update_file_status(db, job_id, file_path.name, "processing", 90)
 
             return {"success": True, "chunks": len(chunks)}
@@ -157,6 +217,27 @@ class ReferenceProcessor:
         except Exception as e:
             logger.error(f"Failed to process {file_path.name}: {e}", exc_info=True)
             raise
+
+    def _get_file_type(self, file_path: Path) -> str:
+        """
+        Get MIME type for a file based on extension.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            MIME type string
+        """
+        suffix = file_path.suffix.lower()
+        type_map = {
+            ".pdf": "application/pdf",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+        return type_map.get(suffix, "application/octet-stream")
 
     def _extract_text_ocr(self, file_path: Path) -> str:
         """

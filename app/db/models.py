@@ -3,7 +3,17 @@
 from datetime import datetime
 from typing import Dict, Optional
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -115,3 +125,62 @@ class ReferenceUploadJob(Base):
 
     def __repr__(self):
         return f"<ReferenceUploadJob(id={self.id}, status={self.status}, progress={self.progress}%)>"
+
+
+class UploadMetrics(Base):
+    """Model for tracking per-file upload and processing metrics."""
+
+    __tablename__ = "upload_metrics"
+
+    id = Column(String, primary_key=True, index=True)
+    job_id = Column(
+        String,
+        ForeignKey("reference_upload_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # File information
+    filename = Column(String, nullable=False)
+    file_size_bytes = Column(BigInteger, nullable=False)
+    file_type = Column(String, nullable=False)  # e.g., 'application/pdf', 'image/png'
+    page_count = Column(Integer, nullable=True)  # For PDFs
+
+    # Upload timestamps
+    upload_start_time = Column(DateTime(timezone=True), nullable=True)
+    upload_end_time = Column(DateTime(timezone=True), nullable=True)
+
+    # OCR timestamps
+    ocr_start_time = Column(DateTime(timezone=True), nullable=True)
+    ocr_end_time = Column(DateTime(timezone=True), nullable=True)
+    ocr_duration_ms = Column(Integer, nullable=True)
+
+    # Chunking timestamps
+    chunking_start_time = Column(DateTime(timezone=True), nullable=True)
+    chunking_end_time = Column(DateTime(timezone=True), nullable=True)
+    chunking_duration_ms = Column(Integer, nullable=True)
+
+    # Embedding timestamps
+    embedding_start_time = Column(DateTime(timezone=True), nullable=True)
+    embedding_end_time = Column(DateTime(timezone=True), nullable=True)
+    embedding_duration_ms = Column(Integer, nullable=True)
+
+    # Storage timestamps
+    storage_start_time = Column(DateTime(timezone=True), nullable=True)
+    storage_end_time = Column(DateTime(timezone=True), nullable=True)
+    storage_duration_ms = Column(Integer, nullable=True)
+
+    # Calculated metrics
+    total_duration_ms = Column(Integer, nullable=True)
+    network_throughput_bps = Column(Float, nullable=True)  # bytes per second
+
+    # Timestamp
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationship to job
+    job = relationship("ReferenceUploadJob", backref="metrics")
+
+    def __repr__(self):
+        return f"<UploadMetrics(id={self.id}, filename={self.filename}, job_id={self.job_id})>"

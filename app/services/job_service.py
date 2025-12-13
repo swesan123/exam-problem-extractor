@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.db.models import ReferenceUploadJob
+from app.services.metrics_service import MetricsService
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +97,47 @@ class JobService:
             .order_by(ReferenceUploadJob.created_at.desc())
             .all()
         )
+
+    def get_job_metrics(self, job_id: str) -> List:
+        """
+        Get all metrics records for a job.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            List of metrics records
+        """
+        metrics_service = MetricsService(self.db)
+        return metrics_service.get_job_metrics(job_id)
+
+    def calculate_eta(self, job_id: str) -> Optional[float]:
+        """
+        Calculate estimated time to completion based on historical averages.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            Estimated seconds remaining, or None if cannot calculate
+        """
+        job = self.get_job(job_id)
+        if not job or job.status not in ["pending", "processing"]:
+            return None
+
+        metrics_service = MetricsService(self.db)
+        summary = metrics_service.get_job_metrics_summary(job_id)
+
+        if summary["total_files"] == 0 or summary["avg_total_duration_ms"] == 0:
+            return None
+
+        # Calculate average time per file
+        avg_time_per_file_ms = summary["avg_total_duration_ms"]
+        remaining_files = job.total_files - job.processed_files
+
+        if remaining_files <= 0:
+            return 0.0
+
+        # Estimate: remaining files * average time per file
+        estimated_ms = remaining_files * avg_time_per_file_ms
+        return estimated_ms / 1000.0  # Convert to seconds

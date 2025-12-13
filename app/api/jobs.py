@@ -43,6 +43,21 @@ async def get_job_status(
                 detail=f"Job with ID '{job_id}' not found",
             )
 
+        # Calculate ETA
+        estimated_completion_time = job_service.calculate_eta(job_id)
+
+        # Get metrics summary (optional, only if metrics exist)
+        metrics_summary = None
+        try:
+            from app.services.metrics_service import MetricsService
+
+            metrics_service = MetricsService(db)
+            summary = metrics_service.get_job_metrics_summary(job_id)
+            if summary["total_files"] > 0:
+                metrics_summary = summary
+        except Exception as e:
+            logger.debug(f"Could not get metrics summary: {e}")
+
         return {
             "job_id": job.id,
             "status": job.status,
@@ -52,6 +67,8 @@ async def get_job_status(
             "failed_files": job.failed_files,
             "file_statuses": job.file_statuses or {},
             "error_message": job.error_message,
+            "estimated_completion_time": estimated_completion_time,
+            "metrics_summary": metrics_summary,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,
