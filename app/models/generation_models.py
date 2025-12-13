@@ -121,6 +121,12 @@ class GenerateResponse(BaseModel):
         default_factory=dict,
         description="References used for generation (assessment and lecture)",
     )
+    mock_exam_id: Optional[str] = Field(
+        None, description="ID of created mock exam (for mock_exam mode)"
+    )
+    weighting_rules: Optional[Dict] = Field(
+        None, description="Weighting rules used for mock exam generation"
+    )
 
     @model_validator(mode="after")
     def validate_question_or_questions(self):
