@@ -80,6 +80,7 @@ def _run_migrations() -> None:
         # Migration: Create mock_exams table if it doesn't exist
         if "mock_exams" not in table_names:
             with engine.begin() as conn:
+                # SQLite doesn't support JSON type natively, use TEXT
                 conn.execute(text("""
                     CREATE TABLE mock_exams (
                         id VARCHAR NOT NULL PRIMARY KEY,
@@ -94,7 +95,7 @@ def _run_migrations() -> None:
                         FOREIGN KEY(class_id) REFERENCES classes (id) ON DELETE CASCADE
                     )
                 """))
-                conn.execute(text("CREATE INDEX ix_mock_exams_class_id ON mock_exams (class_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_mock_exams_class_id ON mock_exams (class_id)"))
                 
                 import logging
                 logger = logging.getLogger(__name__)
