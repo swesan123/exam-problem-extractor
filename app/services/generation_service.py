@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from app.config import settings
 from app.models.retrieval_models import RetrievedChunk
+from app.services.tagging_service import TaggingService
 from app.utils.latex_converter import convert_to_latex
 
 
@@ -560,6 +561,8 @@ Use the lecture examples to ensure content accuracy and topic coverage."""
         lecture_chunks: List[RetrievedChunk],
         references_used: Optional[Dict[str, List[Dict]]] = None,
         include_solution: bool = False,
+        question_count: Optional[int] = None,
+        focus_on_uncertain: bool = False,
     ) -> Dict:
         """
         Generate complete mock exam following exam structure.
@@ -570,13 +573,36 @@ Use the lecture examples to ensure content accuracy and topic coverage."""
             assessment_chunks: List of RetrievedChunk objects for structure/format examples
             lecture_chunks: List of RetrievedChunk objects for content/topic examples
             references_used: Optional dict of references used
+            include_solution: Whether to include solutions
+            question_count: Optional override for total question count (if None, parsed from exam_format)
+            focus_on_uncertain: If True, prioritize chunks from topics with low user confidence
+                (Note: caller should filter chunks based on confidence before passing them in)
 
         Returns:
-            Dictionary with formatted exam document and metadata
+            Dictionary with formatted exam document, individual questions with tags, and metadata
         """
         # Parse exam format to extract question types and counts
         # Simple parsing - can be enhanced
         question_specs = self._parse_exam_format(exam_format)
+        
+        # Override total question count if provided
+        if question_count is not None:
+            # Adjust question_specs to match question_count
+            current_total = sum(spec['count'] for spec in question_specs)
+            if current_total > 0:
+                # Scale proportionally
+                scale_factor = question_count / current_total
+                for spec in question_specs:
+                    spec['count'] = max(1, int(spec['count'] * scale_factor))
+                # Adjust to exact count
+                current_total = sum(spec['count'] for spec in question_specs)
+                if current_total != question_count:
+                    # Add/subtract from first spec
+                    diff = question_count - current_total
+                    question_specs[0]['count'] = max(1, question_specs[0]['count'] + diff)
+            else:
+                # No specs, create default
+                question_specs = [{"type": "question", "count": question_count, "points": None}]
         
         system_prompt = """You are an expert at creating complete exam documents.
 Your task is to generate a full exam following the specified structure.
@@ -650,18 +676,57 @@ Each question must be clearly numbered (1., 2., 3., etc.) and separated from oth
 
             # Split into individual questions (simple heuristic)
             # In production, you might want more sophisticated parsing
-            questions = self._split_exam_into_questions(exam_content)
+            question_strings = self._split_exam_into_questions(exam_content)
+
+            # Extract tags from reference chunks for each question
+            # Map chunks to questions based on similarity/coverage
+            questions_with_tags = []
+            all_chunks = assessment_chunks + lecture_chunks
+            
+            for i, question_text in enumerate(question_strings):
+                # Find the most relevant chunk(s) for this question
+                # Simple approach: use chunks in order, cycling through them
+                # In a more sophisticated implementation, you might match based on content similarity
+                chunk_index = i % len(all_chunks) if all_chunks else 0
+                relevant_chunk = all_chunks[chunk_index] if all_chunks else None
+                
+                # Extract tags from chunk metadata
+                question_tags = {}
+                if relevant_chunk:
+                    metadata = relevant_chunk.metadata or {}
+                    
+                    # Merge auto_tags and user_overrides
+                    auto_tags = metadata.get("auto_tags", {})
+                    user_overrides = metadata.get("user_overrides", {})
+                    merged_tags = TaggingService.merge_metadata(auto_tags, user_overrides)
+                    
+                    # Extract tags
+                    question_tags = {
+                        "slideset": merged_tags.get("slideset") or metadata.get("slideset"),
+                        "slide": merged_tags.get("slide_number") or metadata.get("slide_number"),
+                        "topic": merged_tags.get("topic") or metadata.get("topic"),
+                    }
+                
+                questions_with_tags.append({
+                    "question_text": question_text,
+                    "question_number": i + 1,
+                    "slideset": question_tags.get("slideset"),
+                    "slide": question_tags.get("slide"),
+                    "topic": question_tags.get("topic"),
+                })
 
             metadata = {
                 "model": self.model,
                 "tokens_used": response.usage.total_tokens if response.usage else 0,
                 "assessment_count": len(assessment_chunks),
                 "lecture_count": len(lecture_chunks),
-                "question_count": len(questions),
+                "question_count": len(question_strings),
+                "focus_on_uncertain": focus_on_uncertain,
             }
 
             return {
-                "questions": questions,
+                "questions": question_strings,  # Keep for backward compatibility
+                "questions_with_tags": questions_with_tags,  # New structured format
                 "exam_content": exam_content,  # Full formatted exam
                 "metadata": metadata,
             }
@@ -836,6 +901,90 @@ Each question must be clearly numbered (1., 2., 3., etc.) and separated from oth
                     })
         
         return specs if specs else [{"type": "question", "count": 1, "points": None}]
+
+    def _infer_weighting_rules(
+        self, exam_format: str, exam_type: Optional[str] = None
+    ) -> Dict:
+        """
+        Infer weighting rules from exam structure.
+
+        Args:
+            exam_format: Exam format string (e.g., "5 pre-midterm, 3 post-midterm")
+            exam_type: Optional exam type (e.g., "midterm", "final")
+
+        Returns:
+            Dictionary with weighting rules:
+            {
+                "pre_midterm_weight": float,
+                "post_midterm_weight": float,
+                # Or more granular:
+                "region_weights": {"pre": float, "post": float},
+                # Or slide-based:
+                "slide_ranges": [{"start": int, "end": int, "weight": float}, ...]
+            }
+        """
+        import re
+
+        # Default weights
+        default_rules = {
+            "pre_midterm_weight": 1.0,
+            "post_midterm_weight": 1.0,
+        }
+
+        # Try to parse explicit weighting from exam_format
+        if exam_format:
+            # Look for patterns like "5 pre-midterm, 3 post-midterm"
+            pre_pattern = r"(\d+)\s+pre[-_]?midterm"
+            post_pattern = r"(\d+)\s+post[-_]?midterm"
+
+            pre_match = re.search(pre_pattern, exam_format.lower())
+            post_match = re.search(post_pattern, exam_format.lower())
+
+            if pre_match and post_match:
+                pre_count = int(pre_match.group(1))
+                post_count = int(post_match.group(1))
+                total = pre_count + post_count
+
+                if total > 0:
+                    # Weight based on ratio
+                    pre_weight = pre_count / total
+                    post_weight = post_count / total
+                    # Normalize so max weight is 2.0
+                    max_weight = max(pre_weight, post_weight)
+                    if max_weight > 0:
+                        pre_weight = (pre_weight / max_weight) * 2.0
+                        post_weight = (post_weight / max_weight) * 2.0
+
+                    return {
+                        "pre_midterm_weight": pre_weight,
+                        "post_midterm_weight": post_weight,
+                        "region_weights": {"pre": pre_weight, "post": post_weight},
+                    }
+
+        # If exam_type is specified, use defaults based on type
+        if exam_type:
+            exam_type_lower = exam_type.lower()
+            if "midterm" in exam_type_lower:
+                # Midterm: less weight on post-midterm content
+                return {
+                    "pre_midterm_weight": 1.0,
+                    "post_midterm_weight": 0.5,
+                    "region_weights": {"pre": 1.0, "post": 0.5},
+                }
+            elif "final" in exam_type_lower:
+                # Final: more weight on post-midterm content
+                return {
+                    "pre_midterm_weight": 1.0,
+                    "post_midterm_weight": 2.0,
+                    "region_weights": {"pre": 1.0, "post": 2.0},
+                }
+
+        # Default: equal weight
+        return {
+            "pre_midterm_weight": 1.0,
+            "post_midterm_weight": 1.0,
+            "region_weights": {"pre": 1.0, "post": 1.0},
+        }
 
     def _split_exam_into_questions(self, exam_content: str) -> List[str]:
         """

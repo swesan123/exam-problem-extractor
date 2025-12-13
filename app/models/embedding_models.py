@@ -26,7 +26,7 @@ class EmbeddingMetadata(BaseModel):
         None,
         description="Type of reference (e.g., assessment, lecture, homework, notes, textbook). Assessment types define structure/format, lecture types define content.",
     )
-    # Tagging fields
+    # Tagging fields (aligned with database schema)
     slideset: Optional[str] = Field(
         None, description="Slideset name (e.g., 'Lecture_5')"
     )

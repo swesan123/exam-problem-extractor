@@ -32,5 +32,21 @@ export const referenceContentService = {
   async delete(chunkId: string): Promise<void> {
     await apiClient.delete(`/api/reference-content/${chunkId}`)
   },
+
+  async update(
+    chunkId: string,
+    updates: {
+      exam_region?: 'pre' | 'post' | null
+      slideset?: string
+      slide_number?: number
+      topic?: string
+    }
+  ): Promise<ReferenceContentItem> {
+    const response = await apiClient.patch<ReferenceContentItem>(
+      `/api/reference-content/${chunkId}`,
+      updates
+    )
+    return response.data
+  },
 }
 
