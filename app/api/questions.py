@@ -339,16 +339,16 @@ async def delete_question(
 @router.get("/{question_id}/download", status_code=status.HTTP_200_OK)
 async def download_question(
     question_id: str,
-    format: str = Query("txt", description="Export format (txt, pdf, docx, json)"),
+    format: str = Query("pdf", description="Export format (pdf only)"),
     include_solution: bool = Query(False, description="Include solution in export"),
     db: Session = Depends(get_db),
 ):
     """
-    Download a single question in specified format.
+    Download a single question in PDF format.
 
     Args:
         question_id: Question ID
-        format: Export format (txt, pdf, docx, json)
+        format: Export format (pdf only)
         include_solution: Whether to include solution
         db: Database session
 
@@ -367,14 +367,14 @@ async def download_question(
                 detail=f"Question with ID '{question_id}' not found",
             )
 
-        # Validate format
-        try:
-            export_format = ExportFormat(format.lower())
-        except ValueError:
+        # Validate format - only PDF allowed
+        if format.lower() != "pdf":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported format '{format}'. Supported formats: txt, pdf, docx, json",
+                detail=f"Only PDF format is supported. Received: '{format}'",
             )
+        
+        export_format = ExportFormat.PDF
 
         # Export question
         export_service = ExportService()

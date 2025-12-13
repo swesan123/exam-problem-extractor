@@ -14,10 +14,12 @@ export interface ReferenceCitation {
   chunk_id: string
   reference_type: string
   score: number
+  coverage?: number
 }
 
 export interface GenerateResponse {
-  question: string
+  question?: string
+  questions?: string[]
   metadata: Record<string, unknown>
   processing_steps: string[]
   question_id?: string

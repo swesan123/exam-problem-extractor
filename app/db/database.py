@@ -62,6 +62,38 @@ def init_db() -> None:
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
+    
+    # Run migrations
+    _run_migrations()
+
+
+def _run_migrations() -> None:
+    """
+    Run database migrations to add new columns to existing tables.
+    """
+    from sqlalchemy import inspect, text
+    
+    try:
+        inspector = inspect(engine)
+        
+        # Check if classes table exists
+        if "classes" in inspector.get_table_names():
+            # Get existing columns
+            existing_columns = [col["name"] for col in inspector.get_columns("classes")]
+            
+            # Migration: Add exam_format column if it doesn't exist
+            if "exam_format" not in existing_columns:
+                with engine.begin() as conn:  # Use begin() for automatic transaction management
+                    conn.execute(text("ALTER TABLE classes ADD COLUMN exam_format TEXT"))
+                
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info("Migration: Added exam_format column to classes table")
+    except Exception as e:
+        # Log error but don't fail startup - migrations are best-effort
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Migration failed: {e}", exc_info=True)
 
 
 def drop_db() -> None:

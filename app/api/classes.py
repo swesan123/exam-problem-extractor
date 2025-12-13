@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -229,19 +229,84 @@ async def delete_class(
         ) from e
 
 
+@router.options("/{class_id}/exam-format")
+async def options_exam_format(class_id: str):
+    """Handle OPTIONS preflight request for exam-format endpoint."""
+    return Response(status_code=status.HTTP_200_OK)
+
+@router.patch("/{class_id}/exam-format", response_model=ClassResponse, status_code=status.HTTP_200_OK)
+async def update_exam_format(
+    request: Request,
+    class_id: str,
+    exam_format: str = Form(..., description="Exam format template"),
+    db: Session = Depends(get_db),
+):
+    """
+    Update exam format for a class.
+
+    Args:
+        request: FastAPI Request object
+        class_id: Class ID
+        exam_format: Exam format template (e.g., "5 multiple choice, 3 short answer, 2 long answer")
+        db: Database session
+
+    Returns:
+        Updated class
+    """
+    try:
+        service = ClassService(db)
+        class_obj = service.get_class(class_id)
+
+        if not class_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Class with ID '{class_id}' not found",
+            )
+
+        # Update exam format
+        from app.models.class_models import ClassUpdate
+        update_data = ClassUpdate(exam_format=exam_format)
+        updated_class = service.update_class(class_id, update_data)
+
+        if not updated_class:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update exam format",
+            )
+
+        # Get with question count
+        class_data_response = service.get_class_with_question_count(class_id)
+        if not class_data_response:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve updated class",
+            )
+
+        return ClassResponse(**class_data_response)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update exam format: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update exam format: {str(e)}",
+        ) from e
+
+
 @router.get("/{class_id}/export", status_code=status.HTTP_200_OK)
 async def export_class_questions(
     class_id: str,
-    format: str = Query("txt", description="Export format (txt, pdf, docx, json)"),
+    format: str = Query("pdf", description="Export format (pdf only)"),
     include_solutions: bool = Query(False, description="Include solutions in export"),
     db: Session = Depends(get_db),
 ):
     """
-    Export all questions from a class to a file.
+    Export all questions from a class to a PDF file.
 
     Args:
         class_id: Class ID
-        format: Export format (txt, pdf, docx, json)
+        format: Export format (pdf only)
         include_solutions: Whether to include solutions
         db: Database session
 
@@ -267,14 +332,14 @@ async def export_class_questions(
                 detail=f"No questions found for class '{class_id}'",
             )
 
-        # Validate format
-        try:
-            export_format = ExportFormat(format.lower())
-        except ValueError:
+        # Validate format - only PDF allowed
+        if format.lower() != "pdf":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported format '{format}'. Supported formats: txt, pdf, docx, json",
+                detail=f"Only PDF format is supported. Received: '{format}'",
             )
+        
+        export_format = ExportFormat.PDF
 
         # Export questions
         export_service = ExportService()

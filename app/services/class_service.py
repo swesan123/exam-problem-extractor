@@ -121,6 +121,8 @@ class ClassService:
             class_obj.description = class_data.description
         if class_data.subject is not None:
             class_obj.subject = class_data.subject
+        if class_data.exam_format is not None:
+            class_obj.exam_format = class_data.exam_format
 
         self.db.commit()
         self.db.refresh(class_obj)
@@ -173,6 +175,7 @@ class ClassService:
             "name": class_obj.name,
             "description": class_obj.description,
             "subject": class_obj.subject,
+            "exam_format": class_obj.exam_format,
             "question_count": question_count,
             "created_at": class_obj.created_at,
             "updated_at": class_obj.updated_at,

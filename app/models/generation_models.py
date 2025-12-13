@@ -1,6 +1,6 @@
 """Pydantic models for generation endpoint."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from fastapi import UploadFile
 from pydantic import BaseModel, Field, model_validator
@@ -26,14 +26,38 @@ class GenerateRequest(BaseModel):
         default=False,
         description="Whether to include solution in the generated question",
     )
+    mode: Optional[Literal["normal", "coverage", "mock_exam"]] = Field(
+        default="normal",
+        description="Generation mode: normal (single question), coverage (batch), or mock_exam",
+    )
+    question_count: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Number of questions to generate (for coverage mode)",
+    )
+    exam_format: Optional[str] = Field(
+        default=None,
+        description="Exam format template (for mock_exam mode, can be inherited from class)",
+    )
 
     @model_validator(mode="after")
     def validate_at_least_one_provided(self):
-        """Ensure at least one of ocr_text or image_file is provided."""
-        if not self.ocr_text and not self.image_file:
+        """Ensure at least one of ocr_text or image_file is provided for normal mode."""
+        # For coverage and mock_exam modes, input is not required (they use reference content)
+        if self.mode == "normal" and not self.ocr_text and not self.image_file:
             raise ValueError(
-                "At least one of 'ocr_text' or 'image_file' must be provided"
+                "At least one of 'ocr_text' or 'image_file' must be provided for normal mode"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_mode_requirements(self):
+        """Validate mode-specific requirements."""
+        if self.mode == "coverage" and not self.question_count:
+            raise ValueError("question_count is required for coverage mode")
+        # Note: exam_format validation for mock_exam mode is handled in the route
+        # since class_id is passed separately as a Form parameter
         return self
 
     model_config = {
@@ -58,6 +82,9 @@ class ReferenceCitation(BaseModel):
     score: float = Field(
         ..., ge=0.0, le=1.0, description="Similarity score of the reference"
     )
+    coverage: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Coverage score indicating how well this reference is covered in the generated content"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -74,7 +101,12 @@ class ReferenceCitation(BaseModel):
 class GenerateResponse(BaseModel):
     """Response model for generation endpoint."""
 
-    question: str = Field(..., description="Generated exam-style question")
+    question: Optional[str] = Field(
+        None, description="Generated exam-style question (for single question mode)"
+    )
+    questions: Optional[List[str]] = Field(
+        None, description="List of generated questions (for batch/mock exam modes)"
+    )
     metadata: dict = Field(..., description="Metadata about the generation process")
     processing_steps: List[str] = Field(
         ..., description="List of processing steps performed"
@@ -89,6 +121,13 @@ class GenerateResponse(BaseModel):
         default_factory=dict,
         description="References used for generation (assessment and lecture)",
     )
+
+    @model_validator(mode="after")
+    def validate_question_or_questions(self):
+        """Ensure either question or questions is provided."""
+        if not self.question and not self.questions:
+            raise ValueError("Either 'question' or 'questions' must be provided")
+        return self
 
     model_config = {
         "json_schema_extra": {

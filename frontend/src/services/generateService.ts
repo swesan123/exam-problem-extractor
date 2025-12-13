@@ -7,6 +7,9 @@ export interface GenerateRequest {
   retrieved_context?: string
   include_solution?: boolean
   class_id?: string
+  mode?: 'normal' | 'mock_exam'
+  exam_format?: string
+  max_coverage?: boolean
 }
 
 export const generateService = {
@@ -27,6 +30,15 @@ export const generateService = {
     }
     if (data.class_id) {
       formData.append('class_id', data.class_id)
+    }
+    if (data.mode) {
+      formData.append('mode', data.mode)
+    }
+    if (data.exam_format) {
+      formData.append('exam_format', data.exam_format)
+    }
+    if (data.max_coverage !== undefined) {
+      formData.append('max_coverage', String(data.max_coverage))
     }
 
     const response = await apiClient.post<GenerateResponse>('/generate', formData, {

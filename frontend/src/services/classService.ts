@@ -25,5 +25,16 @@ export const classService = {
   async delete(id: string): Promise<void> {
     await apiClient.delete(`/api/classes/${id}`)
   },
+
+  async updateExamFormat(id: string, examFormat: string): Promise<Class> {
+    const formData = new FormData()
+    formData.append('exam_format', examFormat)
+    const response = await apiClient.patch<Class>(`/api/classes/${id}/exam-format`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
 }
 
