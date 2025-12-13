@@ -25,6 +25,14 @@ const ClassDetails = () => {
   const [loadingRefContent, setLoadingRefContent] = useState(false)
   const [deletingChunkId, setDeletingChunkId] = useState<string | null>(null)
   const [viewingFile, setViewingFile] = useState<string | null>(null)
+  const [editingChunkId, setEditingChunkId] = useState<string | null>(null)
+  const [updatingChunk, setUpdatingChunk] = useState<string | null>(null)
+  const [chunkTagForm, setChunkTagForm] = useState<{
+    exam_region?: 'pre' | 'post' | null
+    slideset?: string
+    slide_number?: string
+    topic?: string
+  }>({})
   
   // Upload form state
   const [name, setName] = useState('')
