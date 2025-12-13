@@ -438,6 +438,13 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
   const [expanded, setExpanded] = useState(false)
   const [updatingConfidence, setUpdatingConfidence] = useState(false)
   const [localConfidence, setLocalConfidence] = useState<'confident' | 'uncertain' | 'not_confident' | undefined>(question.user_confidence)
+  const [editingTags, setEditingTags] = useState(false)
+  const [updatingTags, setUpdatingTags] = useState(false)
+  const [tagForm, setTagForm] = useState({
+    slideset: question.slideset || '',
+    slide: question.slide?.toString() || '',
+    topic: question.topic || '',
+  })
   const menuRef = useRef<HTMLDivElement>(null)
   
   // Check if this is a mock exam
@@ -466,6 +473,32 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
     } finally {
       setUpdatingConfidence(false)
     }
+  }
+
+  const handleSaveTags = async () => {
+    try {
+      setUpdatingTags(true)
+      await questionService.update(question.id, {
+        slideset: tagForm.slideset || undefined,
+        slide: tagForm.slide ? parseInt(tagForm.slide) : undefined,
+        topic: tagForm.topic || undefined,
+      })
+      setEditingTags(false)
+      // Optionally reload questions to get updated data
+    } catch (err) {
+      console.error('Failed to update tags:', err)
+    } finally {
+      setUpdatingTags(false)
+    }
+  }
+
+  const handleCancelTags = () => {
+    setTagForm({
+      slideset: question.slideset || '',
+      slide: question.slide?.toString() || '',
+      topic: question.topic || '',
+    })
+    setEditingTags(false)
   }
 
   useEffect(() => {
@@ -592,28 +625,112 @@ const QuestionEntry = ({ question, onDownload, onDelete, deletingId }: QuestionE
                 </div>
               )}
               {/* Tags (slideset, slide, topic) */}
-              {(question.slideset || question.slide || question.topic) && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Tags</h4>
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Tags</h4>
+                  {!editingTags && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingTags(true)
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {editingTags ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Slideset</label>
+                      <input
+                        type="text"
+                        value={tagForm.slideset}
+                        onChange={(e) => setTagForm({ ...tagForm, slideset: e.target.value })}
+                        className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Lecture_5"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Slide Number</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={tagForm.slide}
+                        onChange={(e) => setTagForm({ ...tagForm, slide: e.target.value })}
+                        className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 12"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Topic</label>
+                      <input
+                        type="text"
+                        value={tagForm.topic}
+                        onChange={(e) => setTagForm({ ...tagForm, topic: e.target.value })}
+                        className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Linear Algebra"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSaveTags()
+                        }}
+                        disabled={updatingTags}
+                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+                      >
+                        {updatingTags ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCancelTags()
+                        }}
+                        disabled={updatingTags}
+                        className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex flex-wrap gap-2 text-xs">
-                    {question.slideset && (
+                    {question.slideset ? (
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
                         Slideset: {question.slideset}
                       </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded italic">
+                        No slideset
+                      </span>
                     )}
-                    {question.slide !== undefined && (
+                    {question.slide !== undefined ? (
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
                         Slide: {question.slide}
                       </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded italic">
+                        No slide
+                      </span>
                     )}
-                    {question.topic && (
+                    {question.topic ? (
                       <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
                         Topic: {question.topic}
                       </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded italic">
+                        No topic
+                      </span>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
               {/* Confidence selector */}
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <h4 className="text-sm font-semibold text-gray-900 mb-2">Confidence</h4>
