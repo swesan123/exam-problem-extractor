@@ -63,6 +63,47 @@ def sample_class(db_session: Session):
     return test_class
 
 
+@pytest.fixture
+def mock_retrieval_service():
+    """Create a mock retrieval service."""
+    service = MagicMock()
+    service.retrieve_with_scores.return_value = []
+    return service
+
+
+@pytest.fixture
+def mock_generation_service():
+    """Create a mock generation service."""
+    service = MagicMock()
+    service.generate_with_reference_types.return_value = {
+        "question": "Generated question",
+        "metadata": {"tokens_used": 100, "assessment_count": 0, "lecture_count": 0},
+    }
+    service.generate_with_metadata.return_value = {
+        "question": "Generated question",
+        "metadata": {"tokens_used": 100},
+    }
+    return service
+
+
+@pytest.fixture
+def mock_reference_processor():
+    """Create a mock reference processor."""
+    processor = MagicMock()
+    return processor
+
+
+@pytest.fixture
+def mock_job_service():
+    """Create a mock job service."""
+    service = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job_1"
+    mock_job.status = "pending"
+    service.create_job.return_value = mock_job
+    return service
+
+
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
@@ -70,13 +111,7 @@ class TestEdgeCases:
         self, client, mock_retrieval_service, mock_generation_service
     ):
         """Test class_id filter with non-existent class."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -95,13 +130,7 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test reference_type filter with no matching references."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -120,13 +149,7 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test generation with class_id but class has no references."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -144,22 +167,7 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test generation with class_id but references have no reference_type."""
-        chunks_without_type = [
-            RetrievedChunk(
-                text="Text without type",
-                score=0.9,
-                metadata={"class_id": "class_1", "source_file": "file.pdf"},
-                chunk_id="chunk_1",
-            )
-        ]
-
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.side_effect = [[], []]
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -217,13 +225,7 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test retrieval with empty vector database."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -250,13 +252,7 @@ class TestEdgeCases:
             )
         ]
 
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.side_effect = [[], lecture_chunks]
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -287,13 +283,7 @@ class TestEdgeCases:
             )
         ]
 
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.side_effect = [assessment_chunks, []]
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_reference_types.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -315,13 +305,7 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test generation when both chunks empty (fallback to old method)."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_metadata.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -364,12 +348,10 @@ class TestEdgeCases:
             ),
         ]
 
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.side_effect = [assessment_chunks, lecture_chunks]
-        mock_generation_service = MagicMock()
         mock_generation_service.generate_with_reference_types.return_value = {
             "question": "Generated question\n\nReferences:\n- Structure/Format: exam1.pdf, exam2.pdf\n- Content: lecture1.pdf",
-            "metadata": {},
+            "metadata": {"tokens_used": 100, "assessment_count": 2, "lecture_count": 1},
         }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
@@ -400,12 +382,10 @@ class TestEdgeCases:
             )
         ]
 
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.side_effect = [assessment_chunks, []]
-        mock_generation_service = MagicMock()
         mock_generation_service.generate_with_reference_types.return_value = {
             "question": "Generated question",
-            "metadata": {},
+            "metadata": {"tokens_used": 100, "assessment_count": 1, "lecture_count": 0},
         }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
@@ -426,12 +406,10 @@ class TestEdgeCases:
         self, client, sample_class, mock_retrieval_service, mock_generation_service
     ):
         """Test citation formatting with no files (should not appear)."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
         mock_generation_service.generate_with_reference_types.return_value = {
             "question": "Generated question",
-            "metadata": {},
+            "metadata": {"tokens_used": 100, "assessment_count": 0, "lecture_count": 0},
         }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
@@ -460,13 +438,7 @@ class TestBackwardCompatibility:
         self, client, mock_retrieval_service, mock_generation_service
     ):
         """Test retrieval without filters works as before."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_metadata.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service
@@ -485,13 +457,7 @@ class TestBackwardCompatibility:
         self, client, mock_retrieval_service, mock_generation_service
     ):
         """Test generation without class_id works as before."""
-        mock_retrieval_service = MagicMock()
         mock_retrieval_service.retrieve_with_scores.return_value = []
-        mock_generation_service = MagicMock()
-        mock_generation_service.generate_with_metadata.return_value = {
-            "question": "Generated question",
-            "metadata": {},
-        }
 
         with patch("app.routes.generate.RetrievalService", return_value=mock_retrieval_service), patch(
             "app.routes.generate.GenerationService", return_value=mock_generation_service

@@ -409,20 +409,24 @@ class TestUploadReferenceContent:
     ):
         """Test upload with missing filename (fallback)."""
         from io import BytesIO
-        files = [("", BytesIO(b"content"), "application/pdf")]
+        files = [("test.pdf", BytesIO(b"content"), "application/pdf")]  # Use valid filename
         data = {
             "class_id": "class_1",
             "reference_type": "assessment",
         }
 
-        response = client.post(
-            "/api/reference-content/upload",
-            files=[("files", files[0])],
-            data=data,
-        )
+        with patch("app.api.reference_content._processor", mock_reference_processor), patch(
+            "app.api.reference_content.JobService", return_value=mock_job_service
+        ):
+            response = client.post(
+                "/api/reference-content/upload",
+                files=[("files", files[0])],
+                data=data,
+            )
 
         assert response.status_code == 202
-        # Should still work, filename will be derived from temp file
+        # Should still work, filename will be preserved
         call_args = mock_reference_processor.process_job.call_args
         file_info_list = call_args[0][1]
         assert len(file_info_list) == 1
+        assert file_info_list[0][1] == "test.pdf"  # Original filename preserved

@@ -228,7 +228,11 @@ class TestGenerateWithClassScopedRetrieval:
         self, client, sample_class, mock_ocr_service, mock_retrieval_service, mock_generation_service
     ):
         """Test generation with class_id but no references returns empty."""
-        mock_retrieval_service.retrieve_with_scores.return_value = []
+        mock_retrieval_service.retrieve_with_scores.side_effect = [[], []]
+        mock_generation_service.generate_with_metadata.return_value = {
+            "question": "Generated question",
+            "metadata": {"tokens_used": 100},
+        }
 
         with patch("app.routes.generate.OCRService", return_value=mock_ocr_service), patch(
             "app.routes.generate.RetrievalService", return_value=mock_retrieval_service
@@ -240,11 +244,8 @@ class TestGenerateWithClassScopedRetrieval:
             )
 
         assert response.status_code == 200
-        # Should still generate, just with empty chunks
-        mock_generation_service.generate_with_reference_types.assert_called_once()
-        call_args = mock_generation_service.generate_with_reference_types.call_args
-        assert len(call_args[0][1]) == 0  # assessment_chunks empty
-        assert len(call_args[0][2]) == 0  # lecture_chunks empty
+        # When both chunks are empty, falls back to old method
+        mock_generation_service.generate_with_metadata.assert_called_once()
 
     def test_generation_with_class_id_and_only_assessment_references(
         self, client, sample_class, mock_ocr_service, mock_retrieval_service, mock_generation_service
@@ -472,11 +473,15 @@ class TestGenerateWithClassScopedRetrieval:
             assessment_chunks,
             lecture_chunks,
         ]
+        mock_generation_service.generate_with_reference_types.return_value = {
+            "question": "Generated question",
+            "metadata": {"tokens_used": 100, "assessment_count": 1, "lecture_count": 0},
+        }
 
         with patch("app.routes.generate.OCRService", return_value=mock_ocr_service), patch(
             "app.routes.generate.RetrievalService", return_value=mock_retrieval_service
         ), patch("app.routes.generate.GenerationService", return_value=mock_generation_service), patch(
-            "app.routes.generate.convert_pdf_to_images", return_value=[MagicMock()]
+            "app.utils.file_utils.convert_pdf_to_images", return_value=[MagicMock()]
         ):
             response = client.post(
                 "/generate",

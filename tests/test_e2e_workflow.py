@@ -219,7 +219,11 @@ class TestEndToEndWorkflow:
         mock_generation_service = MagicMock()
         mock_generation_service.generate_with_reference_types.return_value = {
             "question": "Generated question",
-            "metadata": {},
+            "metadata": {"tokens_used": 100, "assessment_count": 0, "lecture_count": 0},
+        }
+        mock_generation_service.generate_with_metadata.return_value = {
+            "question": "Generated question",
+            "metadata": {"tokens_used": 100},
         }
 
         with patch("app.routes.generate.OCRService") as mock_ocr, patch(

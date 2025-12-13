@@ -219,21 +219,37 @@ class TestProcessSingleFile:
         original_filename = "original_document.pdf"
         metadata = {"class_id": "class_1", "reference_type": "lecture"}
 
-        with patch(
-            "app.services.reference_processor.OCRService", return_value=mock_ocr_service
-        ), patch(
-            "app.services.reference_processor.EmbeddingService",
-            return_value=mock_embedding_service,
-        ), patch(
-            "app.services.reference_processor.smart_chunk", return_value=["chunk 1"]
-        ), patch(
-            "app.services.reference_processor.ReferenceProcessor._update_file_status"
-        ), patch(
-            "app.services.reference_processor.ReferenceProcessor._increment_processed_files"
-        ):
-            result = processor._process_single_file(
-                "job_1", sample_file_path, original_filename, metadata, MagicMock()
-            )
+        mock_db = MagicMock()
+        # Mock the database query methods that might be called
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        
+        # Create a non-PDF file path for testing
+        from pathlib import Path
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            test_image_path = Path(tmp.name)
+            test_image_path.write_bytes(b"fake image data")
+        
+        try:
+            with patch(
+                "app.services.reference_processor.OCRService", return_value=mock_ocr_service
+            ), patch(
+                "app.services.reference_processor.EmbeddingService",
+                return_value=mock_embedding_service,
+            ), patch(
+                "app.services.reference_processor.smart_chunk", return_value=["chunk 1"]
+            ), patch.object(
+                processor, "_update_file_status"
+            ), patch.object(
+                processor, "_increment_processed_files"
+            ):
+                result = processor._process_single_file(
+                    "job_1", test_image_path, original_filename, metadata, mock_db
+                )
+        finally:
+            # Clean up
+            if test_image_path.exists():
+                test_image_path.unlink()
 
         assert result["success"] is True
 
