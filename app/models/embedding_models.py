@@ -1,7 +1,7 @@
 """Pydantic models for embedding endpoint."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,23 @@ class EmbeddingMetadata(BaseModel):
         None,
         description="Type of reference (e.g., assessment, lecture, homework, notes, textbook). Assessment types define structure/format, lecture types define content.",
     )
+    # Tagging fields (aligned with database schema)
+    slideset: Optional[str] = Field(
+        None, description="Slideset name (e.g., 'Lecture_5')"
+    )
+    slide_number: Optional[int] = Field(
+        None, ge=1, description="Slide number within slideset"
+    )
+    topic: Optional[str] = Field(None, description="Topic name")
+    exam_region: Optional[str] = Field(
+        None, description="Exam region: 'pre' or 'post' (pre/post-midterm)"
+    )
+    auto_tags: Optional[Dict] = Field(
+        None, description="Auto-extracted tags (for audit trail)"
+    )
+    user_overrides: Optional[Dict] = Field(
+        None, description="User manual overrides (takes precedence over auto_tags)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -37,6 +54,12 @@ class EmbeddingMetadata(BaseModel):
                 "class_id": "class_abc123",
                 "exam_type": "midterm",
                 "reference_type": "assessment",
+                "slideset": "Lecture_5",
+                "slide_number": 12,
+                "topic": "Scheduling Algorithms",
+                "exam_region": "pre",
+                "auto_tags": {"slideset": "Lecture_5", "slide_number": 12},
+                "user_overrides": {},
             }
         }
     }
