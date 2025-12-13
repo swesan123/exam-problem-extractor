@@ -301,6 +301,7 @@ async def generate_question(
         if mode != "mock_exam":
             generation_service = GenerationService()
         
+<<<<<<< HEAD
         # Parse weighting_rules if provided (for mock_exam mode)
         parsed_weighting_rules = None
         if mode == "mock_exam" and weighting_rules:
