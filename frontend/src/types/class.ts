@@ -3,6 +3,7 @@ export interface Class {
   name: string
   description?: string
   subject?: string
+  exam_format?: string
   created_at: string
   updated_at: string
 }

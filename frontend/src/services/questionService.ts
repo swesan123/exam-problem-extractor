@@ -22,7 +22,7 @@ export const questionService = {
 
   async download(
     questionId: string,
-    format: 'txt' | 'pdf' | 'docx' | 'json' = 'txt',
+    format: 'pdf' = 'pdf',
     includeSolution: boolean = false
   ): Promise<void> {
     const response = await apiClient.get(
