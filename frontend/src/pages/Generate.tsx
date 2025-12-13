@@ -289,6 +289,16 @@ const Generate = () => {
         mode: mode,
         exam_format: mode === 'mock_exam' ? (classes.find(c => c.id === selectedClassId)?.exam_format || undefined) : undefined,
         max_coverage: mode === 'mock_exam' ? maxCoverage : undefined,
+        question_count: mode === 'mock_exam' && questionCount !== 'auto' 
+          ? (questionCount === 'custom' ? customQuestionCount : questionCount as number)
+          : undefined,
+        weighting_rules: mode === 'mock_exam' && weightingMode === 'custom'
+          ? JSON.stringify({
+              pre_midterm_weight: preMidtermWeight,
+              post_midterm_weight: postMidtermWeight,
+            })
+          : undefined,
+        focus_on_uncertain: mode === 'mock_exam' ? focusOnUncertain : undefined,
       }
 
       if (imageFile) {
@@ -531,17 +541,110 @@ const Generate = () => {
                           Include solution
                         </button>
                         {mode === 'mock_exam' && (
-                          <button
-                            type="button"
-                            onClick={() => setMaxCoverage(!maxCoverage)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
-                              maxCoverage
-                                ? 'bg-green-100 text-green-700 font-medium'
-                                : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            Max Coverage
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setMaxCoverage(!maxCoverage)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                                maxCoverage
+                                  ? 'bg-green-100 text-green-700 font-medium'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              Max Coverage
+                            </button>
+                            <div className="pt-2 border-t border-gray-200">
+                              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                                Question Count
+                              </label>
+                              <select
+                                value={questionCount}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setQuestionCount(value === 'auto' ? 'auto' : parseInt(value))
+                                }}
+                                className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                              >
+                                <option value="auto">Auto</option>
+                                <option value="5">5</option>
+                                <option value="8">8</option>
+                                <option value="10">10</option>
+                                <option value="12">12</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                                <option value="custom">Custom</option>
+                              </select>
+                              {questionCount === 'custom' && (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="50"
+                                  value={customQuestionCount}
+                                  onChange={(e) => setCustomQuestionCount(parseInt(e.target.value) || 10)}
+                                  className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter number"
+                                />
+                              )}
+                            </div>
+                            <div className="pt-2 border-t border-gray-200">
+                              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                                Weighting
+                              </label>
+                              <select
+                                value={weightingMode}
+                                onChange={(e) => setWeightingMode(e.target.value as 'auto' | 'custom' | 'slide_ranges')}
+                                className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                              >
+                                <option value="auto">Auto (based on exam type)</option>
+                                <option value="custom">Custom weights</option>
+                                <option value="slide_ranges">Slide range weights (Advanced)</option>
+                              </select>
+                              {weightingMode === 'custom' && (
+                                <div className="space-y-2">
+                                  <div>
+                                    <label className="block text-xs text-gray-600 mb-1">Pre-midterm weight</label>
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      value={preMidtermWeight}
+                                      onChange={(e) => setPreMidtermWeight(parseFloat(e.target.value) || 1.0)}
+                                      className="w-full text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-600 mb-1">Post-midterm weight</label>
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      value={postMidtermWeight}
+                                      onChange={(e) => setPostMidtermWeight(parseFloat(e.target.value) || 2.0)}
+                                      className="w-full text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              {weightingMode === 'slide_ranges' && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Advanced slide-based weighting coming soon
+                                </p>
+                              )}
+                            </div>
+                            <div className="pt-2 border-t border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => setFocusOnUncertain(!focusOnUncertain)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                                  focusOnUncertain
+                                    ? 'bg-orange-100 text-orange-700 font-medium'
+                                    : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                Focus on uncertain topics
+                              </button>
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1015,17 +1118,110 @@ const Generate = () => {
                         Include solution
                       </button>
                       {mode === 'mock_exam' && (
-                        <button
-                          type="button"
-                          onClick={() => setMaxCoverage(!maxCoverage)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
-                            maxCoverage
-                              ? 'bg-green-100 text-green-700 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          Max Coverage
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setMaxCoverage(!maxCoverage)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                              maxCoverage
+                                ? 'bg-green-100 text-green-700 font-medium'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            Max Coverage
+                          </button>
+                          <div className="pt-2 border-t border-gray-200">
+                            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                              Question Count
+                            </label>
+                            <select
+                              value={questionCount}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                setQuestionCount(value === 'auto' ? 'auto' : parseInt(value))
+                              }}
+                              className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                            >
+                              <option value="auto">Auto</option>
+                              <option value="5">5</option>
+                              <option value="8">8</option>
+                              <option value="10">10</option>
+                              <option value="12">12</option>
+                              <option value="15">15</option>
+                              <option value="20">20</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                            {questionCount === 'custom' && (
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={customQuestionCount}
+                                onChange={(e) => setCustomQuestionCount(parseInt(e.target.value) || 10)}
+                                className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Enter number"
+                              />
+                            )}
+                          </div>
+                          <div className="pt-2 border-t border-gray-200">
+                            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                              Weighting
+                            </label>
+                            <select
+                              value={weightingMode}
+                              onChange={(e) => setWeightingMode(e.target.value as 'auto' | 'custom' | 'slide_ranges')}
+                              className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                            >
+                              <option value="auto">Auto (based on exam type)</option>
+                              <option value="custom">Custom weights</option>
+                              <option value="slide_ranges">Slide range weights (Advanced)</option>
+                            </select>
+                            {weightingMode === 'custom' && (
+                              <div className="space-y-2">
+                                <div>
+                                  <label className="block text-xs text-gray-600 mb-1">Pre-midterm weight</label>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={preMidtermWeight}
+                                    onChange={(e) => setPreMidtermWeight(parseFloat(e.target.value) || 1.0)}
+                                    className="w-full text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-600 mb-1">Post-midterm weight</label>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={postMidtermWeight}
+                                    onChange={(e) => setPostMidtermWeight(parseFloat(e.target.value) || 2.0)}
+                                    className="w-full text-sm px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {weightingMode === 'slide_ranges' && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Advanced slide-based weighting coming soon
+                              </p>
+                            )}
+                          </div>
+                          <div className="pt-2 border-t border-gray-200">
+                            <button
+                              type="button"
+                              onClick={() => setFocusOnUncertain(!focusOnUncertain)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                                focusOnUncertain
+                                  ? 'bg-orange-100 text-orange-700 font-medium'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              Focus on uncertain topics
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
