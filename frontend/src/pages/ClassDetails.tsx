@@ -679,12 +679,180 @@ const ClassDetails = () => {
                       {viewingFile === key && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
                           <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {chunks.map((chunk, idx) => (
-                              <div key={chunk.chunk_id} className="bg-white rounded p-3 border border-gray-200">
-                                <div className="text-xs text-gray-500 mb-1">Chunk {idx + 1}</div>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{chunk.text}</p>
-                              </div>
-                            ))}
+                            {chunks.map((chunk, idx) => {
+                              const isEditing = editingChunkId === chunk.chunk_id
+                              const isUpdating = updatingChunk === chunk.chunk_id
+                              const effectiveMetadata = chunk.metadata
+                              const examRegion = effectiveMetadata?.exam_region as 'pre' | 'post' | undefined
+                              const slideset = effectiveMetadata?.slideset as string | undefined
+                              const slideNumber = effectiveMetadata?.slide_number as number | undefined
+                              const topic = effectiveMetadata?.topic as string | undefined
+                              const autoTags = effectiveMetadata?.auto_tags as Record<string, any> | undefined
+                              const userOverrides = effectiveMetadata?.user_overrides as Record<string, any> | undefined
+                              const hasUserOverrides = userOverrides && Object.keys(userOverrides).length > 0
+
+                              const handleSaveChunkTags = async () => {
+                                try {
+                                  setUpdatingChunk(chunk.chunk_id)
+                                  await referenceContentService.update(chunk.chunk_id, {
+                                    exam_region: chunkTagForm.exam_region === null ? null : chunkTagForm.exam_region,
+                                    slideset: chunkTagForm.slideset || undefined,
+                                    slide_number: chunkTagForm.slide_number ? parseInt(chunkTagForm.slide_number) : undefined,
+                                    topic: chunkTagForm.topic || undefined,
+                                  })
+                                  setEditingChunkId(null)
+                                  // Reload reference content
+                                  if (id) {
+                                    const response = await referenceContentService.getByClass(id)
+                                    setReferenceContent(response.items)
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to update chunk tags:', err)
+                                } finally {
+                                  setUpdatingChunk(null)
+                                }
+                              }
+
+                              const handleStartEdit = () => {
+                                setChunkTagForm({
+                                  exam_region: examRegion || null,
+                                  slideset: slideset || '',
+                                  slide_number: slideNumber?.toString() || '',
+                                  topic: topic || '',
+                                })
+                                setEditingChunkId(chunk.chunk_id)
+                              }
+
+                              const handleCancelEdit = () => {
+                                setEditingChunkId(null)
+                                setChunkTagForm({})
+                              }
+
+                              return (
+                                <div key={chunk.chunk_id} className="bg-white rounded p-3 border border-gray-200">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <div className="text-xs text-gray-500">Chunk {idx + 1}</div>
+                                    {!isEditing && (
+                                      <button
+                                        onClick={handleStartEdit}
+                                        className="text-xs text-blue-600 hover:text-blue-800"
+                                      >
+                                        Tag
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{chunk.text}</p>
+                                  
+                                  {/* Tags display */}
+                                  {(examRegion || slideset || slideNumber || topic || autoTags || userOverrides) && !isEditing && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                      {hasUserOverrides && (
+                                        <div className="mb-2 text-xs text-orange-600 font-medium">
+                                          ⚠ User overrides applied
+                                        </div>
+                                      )}
+                                      <div className="flex flex-wrap gap-2 text-xs">
+                                        {examRegion && (
+                                          <span className={`px-2 py-1 rounded ${
+                                            examRegion === 'pre' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                                          }`}>
+                                            {examRegion === 'pre' ? 'Pre-midterm' : 'Post-midterm'}
+                                          </span>
+                                        )}
+                                        {slideset && (
+                                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                                            Slideset: {slideset}
+                                          </span>
+                                        )}
+                                        {slideNumber !== undefined && (
+                                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                                            Slide: {slideNumber}
+                                          </span>
+                                        )}
+                                        {topic && (
+                                          <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded">
+                                            Topic: {topic}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {autoTags && Object.keys(autoTags).length > 0 && (
+                                        <div className="mt-2 text-xs text-gray-500">
+                                          Auto-tags: {JSON.stringify(autoTags)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Tag editing form */}
+                                  {isEditing && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">Exam Region</label>
+                                        <select
+                                          value={chunkTagForm.exam_region || ''}
+                                          onChange={(e) => setChunkTagForm({
+                                            ...chunkTagForm,
+                                            exam_region: e.target.value === '' ? null : e.target.value as 'pre' | 'post'
+                                          })}
+                                          className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                          <option value="">Not specified</option>
+                                          <option value="pre">Pre-midterm</option>
+                                          <option value="post">Post-midterm</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">Slideset</label>
+                                        <input
+                                          type="text"
+                                          value={chunkTagForm.slideset || ''}
+                                          onChange={(e) => setChunkTagForm({ ...chunkTagForm, slideset: e.target.value })}
+                                          className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="e.g., Lecture_5"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">Slide Number</label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={chunkTagForm.slide_number || ''}
+                                          onChange={(e) => setChunkTagForm({ ...chunkTagForm, slide_number: e.target.value })}
+                                          className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="e.g., 12"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">Topic</label>
+                                        <input
+                                          type="text"
+                                          value={chunkTagForm.topic || ''}
+                                          onChange={(e) => setChunkTagForm({ ...chunkTagForm, topic: e.target.value })}
+                                          className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="e.g., Linear Algebra"
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={handleSaveChunkTags}
+                                          disabled={isUpdating}
+                                          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
+                                        >
+                                          {isUpdating ? 'Saving...' : 'Save'}
+                                        </button>
+                                        <button
+                                          onClick={handleCancelEdit}
+                                          disabled={isUpdating}
+                                          className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition disabled:opacity-50"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )}
